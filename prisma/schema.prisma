@@ -1,0 +1,230 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  password        String?
+  name            String?
+  avatarUrl       String?
+  role            Role             @default(STUDENT)
+  emailVerified   Boolean          @default(false)
+  googleId        String?          @unique
+  fcmToken        String?
+  college         String?
+  degree          String?
+  graduationYear  Int?
+  city            String?
+  targetRole      String?
+  targetIndustry  String?
+  experienceLevel ExperienceLevel?
+  skills          String[]
+  bio             String?          @db.VarChar(500)
+  linkedinUrl     String?
+  githubUrl       String?
+  portfolioUrl    String?
+  notifJobAlerts  Boolean          @default(true)
+  notifInterviews Boolean          @default(true)
+  notifDigest     Boolean          @default(true)
+  deletedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  resumes      Resume[]
+  atsReports   ATSReport[]
+  applications Application[]
+  chatSessions ChatSession[]
+  savedJobs    SavedJob[]
+  outreachLogs OutreachLog[]
+
+  @@map("users")
+}
+
+model Resume {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  s3Key      String
+  filename   String
+  fileSize   Int
+  mimeType   String
+  isActive   Boolean  @default(true)
+  parsedText String?  @db.Text
+  embedding  Float[]
+  createdAt  DateTime @default(now())
+
+  atsReports ATSReport[]
+
+  @@map("resumes")
+}
+
+model ATSReport {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumeId        String
+  resume          Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  overallScore    Int
+  experienceScore Int
+  skillsScore     Int
+  educationScore  Int
+  summaryScore    Int
+  matchedKeywords String[]
+  missingKeywords String[]
+  suggestions     Json
+  rawAnalysis     String   @db.Text
+  createdAt       DateTime @default(now())
+
+  @@map("ats_reports")
+}
+
+model Job {
+  id             String       @id @default(cuid())
+  externalId     String       @unique
+  title          String
+  company        String
+  companyLogo    String?
+  location       String
+  locationType   LocationType @default(ONSITE)
+  jobType        JobType      @default(FULLTIME)
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String       @default("INR")
+  description    String       @db.Text
+  requirements   String?      @db.Text
+  skills         String[]
+  applyUrl       String
+  source         String
+  embedding      Float[]
+  isActive       Boolean      @default(true)
+  postedAt       DateTime
+  scrapedAt      DateTime     @default(now())
+  expiresAt      DateTime?
+
+  applications Application[]
+  savedBy      SavedJob[]
+
+  @@map("jobs")
+}
+
+model Application {
+  id         String            @id @default(cuid())
+  userId     String
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId      String
+  job        Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  status     ApplicationStatus @default(APPLIED)
+  matchScore Float?
+  notes      String?           @db.Text
+  appliedAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@unique([userId, jobId])
+  @@map("applications")
+}
+
+model ChatSession {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String?
+  messages  ChatMessage[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id        String      @id @default(cuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      MessageRole
+  content   String      @db.Text
+  createdAt DateTime    @default(now())
+
+  @@map("chat_messages")
+}
+
+model SavedJob {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, jobId])
+  @@map("saved_jobs")
+}
+
+model OutreachLog {
+  id                String   @id @default(cuid())
+  senderId          String
+  sender            User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  recruiterLinkedIn String
+  company           String
+  message           String   @db.Text
+  sentAt            DateTime @default(now())
+
+  @@map("outreach_logs")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  resource  String
+  details   Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+enum Role {
+  STUDENT
+  RECRUITER
+  ADMIN
+}
+
+enum ExperienceLevel {
+  FRESHER
+  ZERO_TO_TWO
+  TWO_TO_FIVE
+  FIVE_PLUS
+}
+
+enum LocationType {
+  ONSITE
+  REMOTE
+  HYBRID
+}
+
+enum JobType {
+  FULLTIME
+  PARTTIME
+  INTERNSHIP
+  CONTRACT
+  FREELANCE
+}
+
+enum ApplicationStatus {
+  APPLIED
+  SCREENING
+  INTERVIEW
+  OFFER
+  REJECTED
+  WITHDRAWN
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
