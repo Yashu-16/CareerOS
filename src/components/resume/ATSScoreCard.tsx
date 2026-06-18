@@ -33,7 +33,7 @@ export function ATSScoreCard({ report }: { report: ATSReport | null; resumeId?: 
           </p>
           <Link
             href="/resume"
-            className="mt-4 bg-primary-600 text-white px-4 py-2.5 rounded-lg font-medium text-sm hover:bg-primary-700 transition-all"
+            className="mt-4 bg-primary-600 text-gray-900 px-4 py-2.5 rounded-lg font-medium text-sm hover:bg-primary-700 transition-all"
           >
             Analyze resume
           </Link>

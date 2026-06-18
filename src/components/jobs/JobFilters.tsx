@@ -12,6 +12,7 @@ const JOB_TYPES = [
 ]
 
 const DATE_POSTED = [
+  { value: '', label: 'Any time' },
   { value: 'today', label: 'Today' },
   { value: '3days', label: 'Last 3 days' },
   { value: 'week', label: 'Past week' },
@@ -31,7 +32,7 @@ export function JobFilters() {
   }
 
   const currentType = params.get('jobType') || ''
-  const currentDate = params.get('datePosted') || 'month'
+  const currentDate = params.get('datePosted') || ''
 
   return (
     <aside className="hidden md:block w-60 shrink-0 space-y-6">
@@ -45,7 +46,7 @@ export function JobFilters() {
               className={cn(
                 'w-full text-left px-3 py-2 rounded-lg text-body-sm transition-colors',
                 currentType === t.value
-                  ? 'bg-primary-50 text-primary-600 font-medium'
+                  ? 'bg-primary-50 text-primary-700 font-medium'
                   : 'text-gray-700 hover:bg-gray-100'
               )}
             >
@@ -65,7 +66,7 @@ export function JobFilters() {
               className={cn(
                 'w-full text-left px-3 py-2 rounded-lg text-body-sm transition-colors',
                 currentDate === d.value
-                  ? 'bg-primary-50 text-primary-600 font-medium'
+                  ? 'bg-primary-50 text-primary-700 font-medium'
                   : 'text-gray-700 hover:bg-gray-100'
               )}
             >

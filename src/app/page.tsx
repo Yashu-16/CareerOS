@@ -26,7 +26,7 @@ export default function LandingPage() {
             </Link>
             <Link
               href="/signup"
-              className="bg-primary-600 text-white px-4 py-2.5 rounded-lg font-medium text-sm hover:bg-primary-700 transition-all"
+              className="bg-primary-600 text-gray-900 px-4 py-2.5 rounded-lg font-medium text-sm hover:bg-primary-700 transition-all"
             >
               Get Started Free
             </Link>
@@ -35,28 +35,28 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="bg-primary-600 text-white">
+      <section className="bg-primary-600 text-gray-900">
         <div className="max-w-page mx-auto px-6 py-20 lg:py-28 text-center">
-          <span className="inline-flex items-center gap-2 bg-primary-700/50 text-primary-100 text-body-sm px-3 py-1 rounded-full">
+          <span className="inline-flex items-center gap-2 bg-white/70 text-gray-900 text-body-sm px-3 py-1 rounded-full">
             <Sparkles size={14} /> Built for the Indian job market
           </span>
           <h1 className="text-display-xl lg:text-[52px] font-bold mt-6 max-w-3xl mx-auto leading-tight">
             Get hired faster with AI.
           </h1>
-          <p className="text-body-lg text-primary-100 mt-4 max-w-2xl mx-auto">
+          <p className="text-body-lg text-gray-800 mt-4 max-w-2xl mx-auto">
             CareerOS aggregates real Indian jobs, scores your resume against ATS systems, matches you
             to roles semantically, and coaches you with an AI career advisor — all in one platform.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-8">
             <Link
               href="/signup"
-              className="bg-white text-primary-600 px-6 py-3 rounded-lg font-semibold hover:bg-primary-50 transition-all inline-flex items-center gap-2"
+              className="bg-gray-900 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-700 transition-all inline-flex items-center gap-2"
             >
               Get Started Free <ArrowRight size={18} />
             </Link>
             <a
               href="#how-it-works"
-              className="border border-primary-300 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition-all"
+              className="border border-gray-900 text-gray-900 px-6 py-3 rounded-lg font-semibold hover:bg-white/30 transition-all"
             >
               See How It Works
             </a>
@@ -73,8 +73,8 @@ export default function LandingPage() {
               ['Free', 'To Start'],
             ].map(([big, small]) => (
               <div key={small}>
-                <div className="text-h1 font-bold text-white">{big}</div>
-                <div className="text-body-sm text-primary-100">{small}</div>
+                <div className="text-h1 font-bold text-gray-900">{big}</div>
+                <div className="text-body-sm text-gray-800">{small}</div>
               </div>
             ))}
           </div>
@@ -142,7 +142,7 @@ export default function LandingPage() {
               { icon: Send, step: '3', title: 'Apply & track', desc: 'Apply with one click and track every application on a Kanban board.' },
             ].map((s) => (
               <div key={s.step} className="bg-white rounded-xl border border-gray-200 p-6 text-center">
-                <div className="h-12 w-12 rounded-full bg-primary-600 text-white grid place-items-center mx-auto text-h2 font-bold">
+                <div className="h-12 w-12 rounded-full bg-primary-600 text-gray-900 grid place-items-center mx-auto text-h2 font-bold">
                   {s.step}
                 </div>
                 <s.icon size={22} className="mx-auto mt-4 text-primary-600" />
@@ -168,7 +168,7 @@ export default function LandingPage() {
             <div key={t.name} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <p className="text-body-md text-gray-700 prose-readable">“{t.quote}”</p>
               <div className="mt-4 flex items-center gap-3">
-                <div className="h-9 w-9 rounded-full bg-primary-600 text-white grid place-items-center font-semibold">
+                <div className="h-9 w-9 rounded-full bg-primary-600 text-gray-900 grid place-items-center font-semibold">
                   {t.name.charAt(0)}
                 </div>
                 <div>
@@ -182,15 +182,15 @@ export default function LandingPage() {
       </section>
 
       {/* Final CTA */}
-      <section className="bg-primary-600 text-white">
+      <section className="bg-primary-600 text-gray-900">
         <div className="max-w-page mx-auto px-6 py-16 text-center">
           <h2 className="text-display-lg">Ready to get hired faster?</h2>
-          <p className="text-body-lg text-primary-100 mt-3">
+          <p className="text-body-lg text-gray-800 mt-3">
             Join thousands of Indian students taking control of their careers.
           </p>
           <Link
             href="/signup"
-            className="inline-flex items-center gap-2 bg-white text-primary-600 px-6 py-3 rounded-lg font-semibold hover:bg-primary-50 transition-all mt-6"
+            className="inline-flex items-center gap-2 bg-gray-900 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-700 transition-all mt-6"
           >
             Create your free account <ArrowRight size={18} />
           </Link>

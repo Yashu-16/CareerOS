@@ -42,7 +42,11 @@ export async function searchJobs(params: SearchJobsParams): Promise<any[]> {
   const url = new URL(`${BASE_URL}/search`)
   url.searchParams.set('query', params.query)
   url.searchParams.set('location', params.location || 'India')
-  url.searchParams.set('employment_types', (params.jobType || 'FULLTIME').toUpperCase())
+  // Only constrain employment type when the user actually picked one; otherwise
+  // JSearch returns every type. Our internal enum must be translated to the
+  // values JSearch expects (INTERN / CONTRACTOR), or filtering silently returns nothing.
+  const jsearchType = toJSearchEmploymentType(params.jobType)
+  if (jsearchType) url.searchParams.set('employment_types', jsearchType)
   url.searchParams.set('date_posted', params.datePosted || 'week')
   url.searchParams.set('page', String(params.page || 1))
   url.searchParams.set('num_pages', String(params.numPages || 1))
@@ -60,6 +64,23 @@ export async function searchJobs(params: SearchJobsParams): Promise<any[]> {
   if (!response.ok) throw new Error(`JSearch API error: ${response.status}`)
   const data = await response.json()
   return data.data || []
+}
+
+/**
+ * Translate our internal JobType enum to the employment_types value JSearch
+ * understands. Returns undefined when no specific type is requested so the
+ * search isn't needlessly narrowed.
+ */
+function toJSearchEmploymentType(jobType?: string): string | undefined {
+  if (!jobType) return undefined
+  const map: Record<string, string> = {
+    FULLTIME: 'FULLTIME',
+    PARTTIME: 'PARTTIME',
+    INTERNSHIP: 'INTERN',
+    CONTRACT: 'CONTRACTOR',
+    FREELANCE: 'CONTRACTOR',
+  }
+  return map[jobType.toUpperCase()]
 }
 
 function mapJobType(type?: string): JobType {

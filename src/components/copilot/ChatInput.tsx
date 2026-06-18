@@ -37,7 +37,7 @@ export function ChatInput({
       <button
         onClick={submit}
         disabled={disabled || !value.trim()}
-        className="bg-primary-600 text-white rounded-lg p-2.5 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        className="bg-primary-600 text-gray-900 rounded-lg p-2.5 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         aria-label="Send"
       >
         <SendHorizonal size={18} />

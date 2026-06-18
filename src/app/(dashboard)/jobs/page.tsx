@@ -11,6 +11,7 @@ import type { JobWithMatch } from '@/types'
 
 function JobsInner() {
   const [jobs, setJobs] = useState<JobWithMatch[]>([])
+  const [total, setTotal] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [warning, setWarning] = useState<string | null>(null)
   const searchParams = useSearchParams()
@@ -20,19 +21,19 @@ function JobsInner() {
     setWarning(null)
     try {
       const params = new URLSearchParams({
-        q: searchParams.get('q') || 'software developer India',
+        q: searchParams.get('q') || '',
         location: searchParams.get('location') || '',
         jobType: searchParams.get('jobType') || '',
-        datePosted: searchParams.get('datePosted') || 'month',
+        datePosted: searchParams.get('datePosted') || '',
         page: searchParams.get('page') || '1',
-        source: 'live',
       })
       const res = await fetch(`/api/jobs?${params}`)
       const data = await res.json()
       setJobs(data.jobs || [])
+      setTotal(typeof data.total === 'number' ? data.total : null)
       setWarning(data.warning || null)
     } catch {
-      setWarning('Unable to fetch live jobs. Please try again shortly.')
+      setWarning('Unable to load jobs. Please try again shortly.')
     } finally {
       setLoading(false)
     }
@@ -47,7 +48,11 @@ function JobsInner() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-h1 text-gray-900">Job Discovery</h1>
-          <p className="text-body-md text-gray-500 mt-1">Real Indian jobs from LinkedIn, Indeed & Naukri.</p>
+          <p className="text-body-md text-gray-500 mt-1">
+            {total !== null
+              ? `${total.toLocaleString('en-IN')} live roles from company career pages, LinkedIn, Indeed & Naukri.`
+              : 'Real Indian jobs from company career pages, LinkedIn, Indeed & Naukri.'}
+          </p>
         </div>
         {warning && (
           <div className="bg-warning-light text-warning text-body-sm px-4 py-2 rounded-lg border border-warning/20 flex items-center gap-2">

@@ -43,5 +43,7 @@ export default withAuth(
 )
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|public/|.*\\.png$|.*\\.svg$).*)'],
+  // `/api/cron` is intentionally excluded: those routes authenticate via a
+  // CRON_SECRET bearer token (used by Vercel Cron), not a NextAuth session.
+  matcher: ['/((?!api/cron|_next/static|_next/image|favicon.ico|public/|.*\\.png$|.*\\.svg$).*)'],
 }

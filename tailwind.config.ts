@@ -6,11 +6,11 @@ const config: Config = {
     extend: {
       colors: {
         primary: {
-          50: '#EBF5FF',
-          100: '#BFDBFE',
-          300: '#93C5FD',
-          600: '#1A56DB',
-          700: '#1E429F',
+          50: '#F2FCE8',
+          100: '#DCF8C0',
+          300: '#A7EE6F',
+          600: '#6BE82C',
+          700: '#3E8E15',
         },
         success: {
           DEFAULT: '#0E9F6E',
