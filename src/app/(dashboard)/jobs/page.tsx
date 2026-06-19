@@ -7,7 +7,7 @@ import { JobFilters } from '@/components/jobs/JobFilters'
 import { JobSearch } from '@/components/jobs/JobSearch'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Button } from '@/components/ui/Button'
-import { AlertTriangle, Loader2 } from 'lucide-react'
+import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
 import type { JobWithMatch } from '@/types'
 
 function JobsInner() {
@@ -19,6 +19,7 @@ function JobsInner() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
   const searchParams = useSearchParams()
 
@@ -76,6 +77,23 @@ function JobsInner() {
     fetchFirstPage()
   }, [fetchFirstPage])
 
+  const refreshCatalog = async () => {
+    setSyncing(true)
+    setWarning(null)
+    try {
+      const res = await fetch('/api/jobs/sync', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || 'Sync failed')
+      await fetchFirstPage()
+    } catch {
+      setWarning('Unable to refresh the job catalog. Please try again shortly.')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  const catalogEmpty = !loading && total === 0 && !searchParams.get('q') && !searchParams.get('location') && !searchParams.get('jobType') && !searchParams.get('source') && !searchParams.get('datePosted')
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -87,11 +105,16 @@ function JobsInner() {
               : 'Real Indian jobs from company career pages, LinkedIn, Indeed & Naukri.'}
           </p>
         </div>
-        {warning && (
-          <div className="bg-warning-light text-warning text-body-sm px-4 py-2 rounded-lg border border-warning/20 flex items-center gap-2">
-            <AlertTriangle size={16} /> {warning}
-          </div>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="secondary" onClick={refreshCatalog} loading={syncing}>
+            <RefreshCw size={16} /> Refresh jobs
+          </Button>
+          {warning && (
+            <div className="bg-warning-light text-warning text-body-sm px-4 py-2 rounded-lg border border-warning/20 flex items-center gap-2">
+              <AlertTriangle size={16} /> {warning}
+            </div>
+          )}
+        </div>
       </div>
 
       <JobSearch />
@@ -107,7 +130,7 @@ function JobsInner() {
             </div>
           ) : (
             <>
-              <JobGrid jobs={jobs} />
+              <JobGrid jobs={jobs} catalogEmpty={catalogEmpty} onRefresh={refreshCatalog} syncing={syncing} />
 
               {(hasMore || jobs.length > 0) && (
                 <div className="flex flex-col items-center gap-2 mt-6">

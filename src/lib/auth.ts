@@ -61,15 +61,29 @@ export const authOptions: NextAuthOptions = {
       return true
     },
     async jwt({ token, user }) {
-      if (user || !token.id) {
-        const dbUser = await prisma.user.findUnique({ where: { email: token.email! } })
-        token.id = dbUser?.id
-        token.role = dbUser?.role
+      if (user) {
+        token.email = user.email
+        token.id = user.id
+        token.role = user.role
+      }
+      // Always resolve the user id from the DB so stale JWT ids (e.g. after a
+      // database migration) don't point at non-existent rows.
+      if (token.email) {
+        const dbUser = await prisma.user.findFirst({
+          where: { email: token.email, deletedAt: null },
+        })
+        if (dbUser) {
+          token.id = dbUser.id
+          token.role = dbUser.role
+        } else {
+          delete token.id
+          delete token.role
+        }
       }
       return token
     },
     async session({ session, token }) {
-      if (session.user) {
+      if (session.user && token.id) {
         session.user.id = token.id as string
         session.user.role = token.role as string
       }

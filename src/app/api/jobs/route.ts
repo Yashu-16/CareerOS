@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
   const jobType = VALID_TYPES.includes(jobTypeParam as JobType) ? (jobTypeParam as JobType) : undefined
   const datePosted = searchParams.get('datePosted') || ''
   const sourceParam = (searchParams.get('source') || '').toLowerCase()
-  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1)
+  const page = Math.min(50, Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1))
 
   // baseWhere holds the filters shared by every query (search/location/date).
   // The two facetable dimensions — job type and source — are layered on top so

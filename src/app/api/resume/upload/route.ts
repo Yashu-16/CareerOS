@@ -79,6 +79,10 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     console.error('[RESUME_UPLOAD]', error)
-    return ApiErrors.externalDown()
+    const code = (error as { code?: string })?.code
+    if (code === 'P2003' || code === 'P2025') {
+      return ApiErrors.unauthorized()
+    }
+    return ApiErrors.database()
   }
 }
