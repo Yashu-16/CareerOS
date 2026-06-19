@@ -29,6 +29,22 @@ const INDIA_JOB_QUERIES = [
   'fresher MBA India',
 ]
 
+// Queries that specifically surface non-full-time arrangements. The jobType
+// biases JSearch's employment_types filter; normalizeJob then refines the final
+// type from the title so these land under the Part-time / Freelance / Contract
+// filters instead of defaulting to Full-time.
+const FLEX_JOB_QUERIES: Array<{ query: string; jobType: string }> = [
+  { query: 'part time jobs India', jobType: 'PARTTIME' },
+  { query: 'part time data entry India', jobType: 'PARTTIME' },
+  { query: 'part time content writer India', jobType: 'PARTTIME' },
+  { query: 'part time customer support India', jobType: 'PARTTIME' },
+  { query: 'freelance developer India', jobType: 'FREELANCE' },
+  { query: 'freelance graphic designer India', jobType: 'FREELANCE' },
+  { query: 'freelance content writer India', jobType: 'FREELANCE' },
+  { query: 'contract software engineer India', jobType: 'CONTRACT' },
+  { query: 'contract data analyst India', jobType: 'CONTRACT' },
+]
+
 export const maxDuration = 300
 
 /**
@@ -112,6 +128,26 @@ export async function GET(req: NextRequest) {
       }
     } catch (err) {
       console.error(`[CRON] Failed query "${query}":`, err)
+      failed++
+    }
+  }
+
+  // 3. Targeted part-time / freelance / contract searches so those filters
+  //    aren't empty. date_posted is widened to a month to maximise coverage.
+  for (const { query, jobType } of FLEX_JOB_QUERIES) {
+    try {
+      const rawJobs = await searchJobs({ query, jobType, datePosted: 'month', numPages: 1 })
+      for (const rawJob of rawJobs) {
+        try {
+          await persistJob(normalizeJob(rawJob))
+          synced++
+        } catch (err) {
+          console.error('[CRON] flex job persist failed:', err)
+          failed++
+        }
+      }
+    } catch (err) {
+      console.error(`[CRON] Failed flex query "${query}":`, err)
       failed++
     }
   }

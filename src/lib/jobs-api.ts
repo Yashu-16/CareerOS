@@ -93,6 +93,21 @@ function mapJobType(type?: string): JobType {
   return map[(type || '').toUpperCase()] || 'FULLTIME'
 }
 
+/**
+ * JSearch only emits coarse employment types (FULLTIME / PARTTIME / CONTRACTOR /
+ * INTERN), so "freelance" roles arrive as CONTRACTOR and many part-time roles
+ * arrive as FULLTIME. Refine using the job title, which is the most reliable
+ * signal, so our PARTTIME / FREELANCE / INTERNSHIP filters surface them.
+ */
+function refineJobType(base: JobType, title?: string): JobType {
+  const t = (title || '').toLowerCase()
+  if (/\bfreelance\b/.test(t)) return 'FREELANCE'
+  if (/\bpart[\s-]?time\b/.test(t)) return 'PARTTIME'
+  if (/\b(intern|internship|trainee|apprentice)\b/.test(t)) return 'INTERNSHIP'
+  if (/\b(contract|contractor|temporary|fixed[\s-]?term)\b/.test(t)) return 'CONTRACT'
+  return base
+}
+
 export function normalizeJob(raw: any): NormalizedJob {
   const location = `${raw.job_city || ''}, ${raw.job_state || ''}, India`
     .replace(/^, /, '')
@@ -112,7 +127,7 @@ export function normalizeJob(raw: any): NormalizedJob {
     companyLogo: raw.employer_logo || null,
     location,
     locationType: raw.job_is_remote ? 'REMOTE' : 'ONSITE',
-    jobType: mapJobType(raw.job_employment_type),
+    jobType: refineJobType(mapJobType(raw.job_employment_type), raw.job_title),
     salaryMin: raw.job_min_salary ?? null,
     salaryMax: raw.job_max_salary ?? null,
     salaryCurrency: raw.job_salary_currency || 'INR',

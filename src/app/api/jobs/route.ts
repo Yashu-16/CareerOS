@@ -4,9 +4,21 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-helpers'
 import { ApiErrors } from '@/lib/errors'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
+import { computeFitScore, type FitProfile } from '@/lib/job-fit'
 
 const VALID_TYPES: JobType[] = ['FULLTIME', 'PARTTIME', 'INTERNSHIP', 'CONTRACT', 'FREELANCE']
 const PAGE_SIZE = 20
+
+// Sources that come straight from a company's own ATS career page (direct apply,
+// no aggregator middleman). Grouped under the "Company career pages" source filter.
+const COMPANY_SOURCES = ['greenhouse', 'lever', 'ashby', 'smartrecruiters']
+
+/** Build a Prisma `source` filter from the source filter key. */
+function sourceClause(key: string): Prisma.StringFilter | string | undefined {
+  if (!key) return undefined
+  if (key === 'company') return { in: COMPANY_SOURCES }
+  return key
+}
 
 /** Translate a "date posted" filter key into an earliest-postedAt cutoff. */
 function dateSince(key: string): Date | null {
@@ -44,20 +56,24 @@ export async function GET(req: NextRequest) {
   const jobTypeParam = (searchParams.get('jobType') || '').toUpperCase()
   const jobType = VALID_TYPES.includes(jobTypeParam as JobType) ? (jobTypeParam as JobType) : undefined
   const datePosted = searchParams.get('datePosted') || ''
+  const sourceParam = (searchParams.get('source') || '').toLowerCase()
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1)
 
-  const where: Prisma.JobWhereInput = { isActive: true }
-  if (jobType) where.jobType = jobType
-  if (location) where.location = { contains: location, mode: 'insensitive' }
+  // baseWhere holds the filters shared by every query (search/location/date).
+  // The two facetable dimensions — job type and source — are layered on top so
+  // each facet count can exclude its own dimension (letting the user freely
+  // switch within that dimension) while still respecting the others.
+  const baseWhere: Prisma.JobWhereInput = { isActive: true }
+  if (location) baseWhere.location = { contains: location, mode: 'insensitive' }
 
   const since = dateSince(datePosted)
-  if (since) where.postedAt = { gte: since }
+  if (since) baseWhere.postedAt = { gte: since }
 
   if (q) {
     // Every search term must match somewhere (title/company/description).
     const terms = q.split(/\s+/).filter((t) => t.length > 1)
     if (terms.length) {
-      where.AND = terms.map((term) => ({
+      baseWhere.AND = terms.map((term) => ({
         OR: [
           { title: { contains: term, mode: 'insensitive' } },
           { company: { contains: term, mode: 'insensitive' } },
@@ -67,8 +83,22 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const src = sourceClause(sourceParam)
+
+  // typeFacets respect source (but not jobType); sourceFacets respect jobType
+  // (but not source); the main query respects both.
+  const typeFacetWhere: Prisma.JobWhereInput = { ...baseWhere }
+  if (src) typeFacetWhere.source = src
+
+  const sourceFacetWhere: Prisma.JobWhereInput = { ...baseWhere }
+  if (jobType) sourceFacetWhere.jobType = jobType
+
+  const where: Prisma.JobWhereInput = { ...baseWhere }
+  if (jobType) where.jobType = jobType
+  if (src) where.source = src
+
   try {
-    const [jobs, total] = await Promise.all([
+    const [jobs, total, profile, resume, typeGroups, sourceGroups] = await Promise.all([
       prisma.job.findMany({
         where,
         orderBy: { postedAt: 'desc' },
@@ -76,15 +106,59 @@ export async function GET(req: NextRequest) {
         skip: (page - 1) * PAGE_SIZE,
       }),
       prisma.job.count({ where }),
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { skills: true, targetRole: true, experienceLevel: true, city: true },
+      }),
+      prisma.resume.findFirst({
+        where: { userId: user.id, isActive: true },
+        select: { parsedText: true },
+      }),
+      prisma.job.groupBy({
+        by: ['jobType'],
+        where: typeFacetWhere,
+        _count: { _all: true },
+      }),
+      prisma.job.groupBy({
+        by: ['source'],
+        where: sourceFacetWhere,
+        _count: { _all: true },
+      }),
     ])
 
+    const typeFacets = typeGroups.reduce<Record<string, number>>((acc, g) => {
+      acc[g.jobType] = g._count._all
+      return acc
+    }, {})
+
+    const sourceFacets = sourceGroups.reduce<Record<string, number>>((acc, g) => {
+      acc[g.source] = g._count._all
+      return acc
+    }, {})
+
+    const fitProfile: FitProfile = {
+      skills: profile?.skills ?? [],
+      targetRole: profile?.targetRole ?? null,
+      experienceLevel: profile?.experienceLevel ?? null,
+      city: profile?.city ?? null,
+      resumeText: resume?.parsedText ?? null,
+    }
+
+    // Attach a fit score and drop the heavy embedding vector from the payload.
+    const scored = jobs.map((job) => {
+      const { embedding, ...safe } = job
+      return { ...safe, matchScore: computeFitScore(job, fitProfile) }
+    })
+
     return NextResponse.json({
-      jobs,
+      jobs: scored,
       source: 'database',
       total,
       page,
       pageSize: PAGE_SIZE,
       hasMore: page * PAGE_SIZE < total,
+      typeFacets,
+      sourceFacets,
     })
   } catch (error) {
     console.error('[JOBS] search failed:', error)

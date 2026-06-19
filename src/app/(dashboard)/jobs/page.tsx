@@ -6,42 +6,75 @@ import { JobGrid } from '@/components/jobs/JobGrid'
 import { JobFilters } from '@/components/jobs/JobFilters'
 import { JobSearch } from '@/components/jobs/JobSearch'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { AlertTriangle } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
+import { AlertTriangle, Loader2 } from 'lucide-react'
 import type { JobWithMatch } from '@/types'
 
 function JobsInner() {
   const [jobs, setJobs] = useState<JobWithMatch[]>([])
   const [total, setTotal] = useState<number | null>(null)
+  const [typeFacets, setTypeFacets] = useState<Record<string, number> | undefined>(undefined)
+  const [sourceFacets, setSourceFacets] = useState<Record<string, number> | undefined>(undefined)
+  const [hasMore, setHasMore] = useState(false)
+  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
   const searchParams = useSearchParams()
 
-  const fetchJobs = useCallback(async () => {
-    setLoading(true)
-    setWarning(null)
-    try {
-      const params = new URLSearchParams({
+  const buildParams = useCallback(
+    (pageNum: number) =>
+      new URLSearchParams({
         q: searchParams.get('q') || '',
         location: searchParams.get('location') || '',
         jobType: searchParams.get('jobType') || '',
         datePosted: searchParams.get('datePosted') || '',
-        page: searchParams.get('page') || '1',
-      })
-      const res = await fetch(`/api/jobs?${params}`)
+        source: searchParams.get('source') || '',
+        page: String(pageNum),
+      }),
+    [searchParams]
+  )
+
+  // Initial load / re-load whenever the search or filters change.
+  const fetchFirstPage = useCallback(async () => {
+    setLoading(true)
+    setWarning(null)
+    try {
+      const res = await fetch(`/api/jobs?${buildParams(1)}`)
       const data = await res.json()
       setJobs(data.jobs || [])
       setTotal(typeof data.total === 'number' ? data.total : null)
+      setTypeFacets(data.typeFacets)
+      setSourceFacets(data.sourceFacets)
+      setHasMore(Boolean(data.hasMore))
+      setPage(1)
       setWarning(data.warning || null)
     } catch {
       setWarning('Unable to load jobs. Please try again shortly.')
     } finally {
       setLoading(false)
     }
-  }, [searchParams])
+  }, [buildParams])
+
+  const loadMore = useCallback(async () => {
+    const next = page + 1
+    setLoadingMore(true)
+    try {
+      const res = await fetch(`/api/jobs?${buildParams(next)}`)
+      const data = await res.json()
+      setJobs((prev) => [...prev, ...(data.jobs || [])])
+      setHasMore(Boolean(data.hasMore))
+      setPage(next)
+    } catch {
+      setWarning('Unable to load more jobs. Please try again shortly.')
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [page, buildParams])
 
   useEffect(() => {
-    fetchJobs()
-  }, [fetchJobs])
+    fetchFirstPage()
+  }, [fetchFirstPage])
 
   return (
     <div className="space-y-6">
@@ -64,7 +97,7 @@ function JobsInner() {
       <JobSearch />
 
       <div className="flex gap-6">
-        <JobFilters />
+        <JobFilters typeFacets={typeFacets} sourceFacets={sourceFacets} />
         <div className="flex-1 min-w-0">
           {loading ? (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -73,7 +106,32 @@ function JobsInner() {
               ))}
             </div>
           ) : (
-            <JobGrid jobs={jobs} />
+            <>
+              <JobGrid jobs={jobs} />
+
+              {(hasMore || jobs.length > 0) && (
+                <div className="flex flex-col items-center gap-2 mt-6">
+                  {hasMore ? (
+                    <Button variant="secondary" onClick={loadMore} disabled={loadingMore}>
+                      {loadingMore ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" /> Loading…
+                        </>
+                      ) : (
+                        'Load more jobs'
+                      )}
+                    </Button>
+                  ) : (
+                    <p className="text-body-sm text-gray-500">You&apos;ve reached the end of the list.</p>
+                  )}
+                  {total !== null && (
+                    <p className="text-caption text-gray-500">
+                      Showing {jobs.length.toLocaleString('en-IN')} of {total.toLocaleString('en-IN')}
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
