@@ -36,45 +36,51 @@ export default function ResumeUpload({
         return
       }
 
-      setStatus('uploading')
-      setProgress(0)
-      setError(null)
+        setStatus('uploading')
+        setProgress(0)
+        setError(null)
 
-      try {
-        const urlRes = await fetch('/api/resume/upload-url', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: file.name, mimeType: file.type, fileSize: file.size }),
-        })
-        if (!urlRes.ok) throw new Error('upload-url failed')
-        const { url, key } = await urlRes.json()
+        try {
+          const formData = new FormData()
+          formData.append('file', file)
 
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest()
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100))
+          const result = await new Promise<{ resumeId: string; profileSynced?: string[] }>((resolve, reject) => {
+            const xhr = new XMLHttpRequest()
+            xhr.upload.onprogress = (e) => {
+              if (e.lengthComputable) {
+                const pct = Math.round((e.loaded / e.total) * 100)
+                setProgress(pct)
+                if (pct >= 100) setStatus('processing')
+              }
+            }
+          xhr.onload = () => {
+            if (xhr.status === 200) {
+              try {
+                resolve(JSON.parse(xhr.responseText))
+              } catch {
+                reject(new Error('Invalid server response'))
+              }
+              return
+            }
+            let message = 'Upload failed. Please try again.'
+            try {
+              const body = JSON.parse(xhr.responseText)
+              if (body?.message) message = body.message
+            } catch {
+              /* use default */
+            }
+            reject(new Error(message))
           }
-          xhr.onload = () => (xhr.status === 200 ? resolve() : reject(new Error('S3 upload failed')))
-          xhr.onerror = () => reject(new Error('S3 upload error'))
-          xhr.open('PUT', url)
-          xhr.setRequestHeader('Content-Type', file.type)
-          xhr.send(file)
+          xhr.onerror = () => reject(new Error('Network error during upload.'))
+          xhr.open('POST', '/api/resume/upload')
+          xhr.send(formData)
         })
-
-        setStatus('processing')
-        const confirmRes = await fetch('/api/resume/confirm-upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key, filename: file.name, mimeType: file.type, fileSize: file.size }),
-        })
-        if (!confirmRes.ok) throw new Error('confirm failed')
-        const { resumeId } = await confirmRes.json()
 
         setStatus('done')
-        onUploadComplete(resumeId, file.name)
-      } catch {
+        onUploadComplete(result.resumeId, file.name)
+      } catch (err) {
         setStatus('error')
-        setError('Upload failed. Please try again.')
+        setError(err instanceof Error ? err.message : 'Upload failed. Please try again.')
       }
     },
     [onUploadComplete]
@@ -110,7 +116,7 @@ export default function ResumeUpload({
           </div>
         )}
         {status === 'processing' && (
-          <p className="text-body-md text-gray-700">Saving your resume...</p>
+          <p className="text-body-md text-gray-700">Reading resume & updating your profile…</p>
         )}
         {status === 'done' && (
           <div className="flex flex-col items-center gap-2 text-success">

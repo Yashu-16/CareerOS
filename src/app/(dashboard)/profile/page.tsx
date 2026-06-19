@@ -39,31 +39,65 @@ export default function ProfilePage() {
   const { toast } = useToast()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [saving, setSaving] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+
+  const applyProfile = (data: Record<string, unknown>) =>
+    setProfile({
+      name: (data.name as string) || '',
+      email: (data.email as string) || '',
+      college: (data.college as string) || '',
+      degree: (data.degree as string) || '',
+      graduationYear: (data.graduationYear as number | null) ?? null,
+      city: (data.city as string) || '',
+      targetRole: (data.targetRole as string) || '',
+      targetIndustry: (data.targetIndustry as string) || '',
+      experienceLevel: (data.experienceLevel as string) || 'FRESHER',
+      skills: (data.skills as string[]) || [],
+      bio: (data.bio as string) || '',
+      linkedinUrl: (data.linkedinUrl as string) || '',
+      githubUrl: (data.githubUrl as string) || '',
+      portfolioUrl: (data.portfolioUrl as string) || '',
+      notifJobAlerts: (data.notifJobAlerts as boolean) ?? true,
+      notifInterviews: (data.notifInterviews as boolean) ?? true,
+      notifDigest: (data.notifDigest as boolean) ?? true,
+    })
+
+  const syncFromResume = async (silent = false) => {
+    setSyncing(true)
+    try {
+      const res = await fetch('/api/user/profile/sync-from-resume', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        if (!silent) toast(data.message || 'Could not read your resume.', 'error')
+        return false
+      }
+      if (data.profile) {
+        setProfile((p) => (p ? { ...p, ...data.profile } : p))
+      }
+      if (!silent && data.updated?.length) {
+        toast(`Imported from resume: ${data.updated.join(', ')}`, 'success')
+      } else if (!silent) {
+        toast('No new fields found in your resume.', 'info')
+      }
+      return Boolean(data.updated?.length)
+    } catch {
+      if (!silent) toast('Could not sync from resume.', 'error')
+      return false
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   useEffect(() => {
     ;(async () => {
       const res = await fetch('/api/user/profile')
       const data = await res.json()
-      setProfile({
-        name: data.name || '',
-        email: data.email || '',
-        college: data.college || '',
-        degree: data.degree || '',
-        graduationYear: data.graduationYear ?? null,
-        city: data.city || '',
-        targetRole: data.targetRole || '',
-        targetIndustry: data.targetIndustry || '',
-        experienceLevel: data.experienceLevel || 'FRESHER',
-        skills: data.skills || [],
-        bio: data.bio || '',
-        linkedinUrl: data.linkedinUrl || '',
-        githubUrl: data.githubUrl || '',
-        portfolioUrl: data.portfolioUrl || '',
-        notifJobAlerts: data.notifJobAlerts ?? true,
-        notifInterviews: data.notifInterviews ?? true,
-        notifDigest: data.notifDigest ?? true,
-      })
+      applyProfile(data)
+
+      const sparse = !(data.skills?.length) && !data.targetRole?.trim()
+      if (sparse) await syncFromResume(true)
     })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const update = <K extends keyof Profile>(key: K, value: Profile[K]) =>
@@ -97,9 +131,16 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-h1 text-gray-900">Profile & Settings</h1>
-        <p className="text-body-md text-gray-500 mt-1">Keep your profile updated for better matches.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-h1 text-gray-900">Profile & Settings</h1>
+          <p className="text-body-md text-gray-500 mt-1">
+            Imported from your resume on upload. Refresh anytime after re-uploading.
+          </p>
+        </div>
+        <Button variant="secondary" onClick={() => syncFromResume()} loading={syncing}>
+          Import from resume
+        </Button>
       </div>
 
       <Card>

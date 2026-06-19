@@ -62,7 +62,7 @@ export function ResumePanel({ initialResume, initialReport, context }: Props) {
             onUploadComplete={(id, filename) => {
               setResume({ id, filename })
               setReport(null)
-              toast('Resume uploaded! Run an analysis below.', 'success')
+              toast('Resume uploaded! Profile & job match scores updated.', 'success')
             }}
           />
         </div>

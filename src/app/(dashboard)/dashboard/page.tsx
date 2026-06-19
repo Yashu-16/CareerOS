@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-helpers'
-import { findMatchingJobs } from '@/lib/pinecone'
+import { getTopMatchedJobs } from '@/lib/job-fit'
 import { StatsRow } from '@/components/dashboard/StatsRow'
 import { TopMatchedJobs } from '@/components/dashboard/TopMatchedJobs'
 import { ATSScoreCard } from '@/components/resume/ATSScoreCard'
@@ -32,13 +32,14 @@ export default async function DashboardPage() {
       orderBy: { updatedAt: 'desc' },
       take: 5,
     }),
-    prisma.resume.findFirst({ where: { userId, isActive: true } }),
+    prisma.resume.findFirst({ where: { userId, isActive: true }, select: { id: true, embedding: true, parsedText: true } }),
   ])
 
-  // AI-matched jobs (degrade gracefully if the vector DB is unavailable).
+  // Matched jobs: prefer vector search when embeddings exist, else resume-based fit.
   let matchedJobs: JobWithMatch[] = []
   if (resume?.embedding?.length) {
     try {
+      const { findMatchingJobs } = await import('@/lib/pinecone')
       const matches = await findMatchingJobs(resume.embedding, 10)
       const jobIds = matches.map((m) => m.id)
       if (jobIds.length) {
@@ -48,8 +49,11 @@ export default async function DashboardPage() {
           .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
       }
     } catch (err) {
-      console.error('[DASHBOARD] match lookup failed:', err)
+      console.error('[DASHBOARD] vector match failed, using resume fit:', err)
     }
+  }
+  if (!matchedJobs.length && resume?.parsedText) {
+    matchedJobs = await getTopMatchedJobs(userId, 10)
   }
 
   const statsMap = Object.fromEntries(applicationStats.map((s) => [s.status, s._count]))

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-helpers'
-import { generateDownloadUrl } from '@/lib/s3'
+import { getResumeBuffer } from '@/lib/resume-storage'
 import { parseResumeBuffer } from '@/lib/resume-parser'
 import { ApiErrors } from '@/lib/errors'
 
@@ -24,11 +24,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ text: resume.parsedText, cached: true })
     }
 
-    const downloadUrl = await generateDownloadUrl(resume.s3Key)
-    const fileRes = await fetch(downloadUrl)
-    if (!fileRes.ok) return ApiErrors.externalDown()
-
-    const buffer = Buffer.from(await fileRes.arrayBuffer())
+    const buffer = await getResumeBuffer(resume.s3Key)
     const text = await parseResumeBuffer(buffer, resume.mimeType)
 
     await prisma.resume.update({ where: { id: resumeId }, data: { parsedText: text } })

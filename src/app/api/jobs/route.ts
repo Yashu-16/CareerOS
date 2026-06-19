@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-helpers'
 import { ApiErrors } from '@/lib/errors'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
-import { computeFitScore, type FitProfile } from '@/lib/job-fit'
+import { computeFitScore, buildFitProfile } from '@/lib/job-fit'
 
 const VALID_TYPES: JobType[] = ['FULLTIME', 'PARTTIME', 'INTERNSHIP', 'CONTRACT', 'FREELANCE']
 const PAGE_SIZE = 20
@@ -98,13 +98,7 @@ export async function GET(req: NextRequest) {
   if (src) where.source = src
 
   try {
-    const [jobs, total, profile, resume, typeGroups, sourceGroups] = await Promise.all([
-      prisma.job.findMany({
-        where,
-        orderBy: { postedAt: 'desc' },
-        take: PAGE_SIZE,
-        skip: (page - 1) * PAGE_SIZE,
-      }),
+    const [total, profile, resume, typeGroups, sourceGroups] = await Promise.all([
       prisma.job.count({ where }),
       prisma.user.findUnique({
         where: { id: user.id },
@@ -136,19 +130,26 @@ export async function GET(req: NextRequest) {
       return acc
     }, {})
 
-    const fitProfile: FitProfile = {
-      skills: profile?.skills ?? [],
-      targetRole: profile?.targetRole ?? null,
-      experienceLevel: profile?.experienceLevel ?? null,
-      city: profile?.city ?? null,
-      resumeText: resume?.parsedText ?? null,
-    }
+    const fitProfile = buildFitProfile(profile ?? {}, resume)
 
-    // Attach a fit score and drop the heavy embedding vector from the payload.
-    const scored = jobs.map((job) => {
+    // Score every matching job, then sort by fit when the user has a parsed resume
+    // so the most relevant roles surface first (not just the newest aggregators).
+    const allMatching = await prisma.job.findMany({ where, orderBy: { postedAt: 'desc' } })
+    const scoredAll = allMatching.map((job) => {
       const { embedding, ...safe } = job
       return { ...safe, matchScore: computeFitScore(job, fitProfile) }
     })
+
+    const sorted =
+      resume?.parsedText
+        ? scoredAll.sort(
+            (a, b) =>
+              (b.matchScore ?? 0) - (a.matchScore ?? 0) ||
+              new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()
+          )
+        : scoredAll
+
+    const scored = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
     return NextResponse.json({
       jobs: scored,
