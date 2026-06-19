@@ -1,25 +1,11 @@
-import type { EventType } from '@prisma/client'
 import { stripHtml, clamp } from '@/lib/connectors/utils'
+import { parseDate } from './fetch-html'
+import type { NormalizedEvent } from './types'
 import { isCareerRelatedEvent, mapUnstopEventType } from './utils'
 
 const BASE = 'https://unstop.com/api/public/opportunity/search-result'
 
-export interface NormalizedEvent {
-  externalId: string
-  title: string
-  organizer: string
-  type: EventType
-  city: string | null
-  state: string | null
-  location: string
-  isOnline: boolean
-  description: string
-  skills: string[]
-  url: string
-  source: string
-  startsAt: Date
-  endsAt: Date | null
-}
+export type { NormalizedEvent } from './types'
 
 const SYNC_PLAN: Array<{ opportunity: string; pages: number }> = [
   { opportunity: 'hackathons', pages: 4 },
@@ -35,12 +21,6 @@ async function fetchPage(opportunity: string, page: number): Promise<any[]> {
   if (!res.ok) throw new Error(`Unstop "${opportunity}" page ${page} returned ${res.status}`)
   const json = await res.json()
   return Array.isArray(json?.data?.data) ? json.data.data : []
-}
-
-function parseDate(value?: string | null): Date | null {
-  if (!value) return null
-  const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? null : d
 }
 
 function normalizeItem(raw: any): NormalizedEvent | null {
@@ -70,19 +50,23 @@ function normalizeItem(raw: any): NormalizedEvent | null {
     ? raw.required_skills.map((s: any) => s.skill || s.skill_name).filter(Boolean)
     : []
 
+  const registrationEnds = parseDate(raw.regnRequirements?.end_regn_dt)
+  const eventEnds = parseDate(raw.end_date)
+
+  // Registration window — used for sorting and "apply by" display.
   const startsAt =
     parseDate(raw.regnRequirements?.start_regn_dt) ||
     parseDate(raw.approved_date) ||
-    parseDate(raw.updated_at) ||
     new Date()
 
-  const endsAt =
-    parseDate(raw.end_date) ||
-    parseDate(raw.regnRequirements?.end_regn_dt) ||
-    null
+  // Prefer registration deadline; that's what users need to act on.
+  const endsAt = registrationEnds || eventEnds || null
 
-  // Skip events that already ended.
-  if (endsAt && endsAt.getTime() < Date.now() - 24 * 60 * 60 * 1000) return null
+  // Drop closed or already-expired listings.
+  if (raw.regn_open === 0) return null
+  const now = Date.now()
+  if (registrationEnds && registrationEnds.getTime() < now) return null
+  if (!registrationEnds && eventEnds && eventEnds.getTime() < now) return null
 
   const slug = raw.public_url || ''
   const url = raw.seo_url || (slug ? `https://unstop.com/${slug}` : 'https://unstop.com')

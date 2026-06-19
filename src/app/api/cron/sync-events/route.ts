@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchAllEvents } from '@/lib/events'
+import { deactivateStaleEvents, fetchAllEvents } from '@/lib/events'
 import { prisma } from '@/lib/prisma'
 
 export const maxDuration = 300
@@ -32,12 +32,13 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (seen.size > 0) {
-      await prisma.careerEvent.updateMany({
-        where: { source: 'unstop', externalId: { notIn: [...seen] }, isActive: true },
-        data: { isActive: false },
-      })
-    }
+    await deactivateStaleEvents(prisma, events)
+
+    // Deactivate any listings whose registration/event deadline has passed.
+    await prisma.careerEvent.updateMany({
+      where: { isActive: true, endsAt: { lt: new Date() } },
+      data: { isActive: false },
+    })
   } catch (err) {
     console.error('[CRON][sync-events] fetch failed:', err)
     failed++

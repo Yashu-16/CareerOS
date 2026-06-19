@@ -15,6 +15,7 @@ function EventsInner() {
   const [events, setEvents] = useState<CareerEventRow[]>([])
   const [city, setCity] = useState<string | null>(null)
   const [typeFacets, setTypeFacets] = useState<Record<string, number>>({})
+  const [sourceFacets, setSourceFacets] = useState<Record<string, number>>({})
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
@@ -23,8 +24,12 @@ function EventsInner() {
     setLoading(true)
     try {
       const type = searchParams.get('type') || ''
-      const qs = type ? `?type=${encodeURIComponent(type)}` : ''
-      const res = await fetch(`/api/events${qs}`)
+      const source = searchParams.get('source') || ''
+      const qs = new URLSearchParams()
+      if (type) qs.set('type', type)
+      if (source) qs.set('source', source)
+      const suffix = qs.toString() ? `?${qs.toString()}` : ''
+      const res = await fetch(`/api/events${suffix}`)
       const text = await res.text()
       if (!text) throw new Error('Empty response from server')
       const data = JSON.parse(text)
@@ -32,6 +37,7 @@ function EventsInner() {
       setEvents(data.events || [])
       setCity(data.city ?? null)
       setTypeFacets(data.typeFacets || {})
+      setSourceFacets(data.sourceFacets || {})
       setTotal(data.total ?? (data.events?.length || 0))
     } catch (err) {
       console.error('[Events]', err)
@@ -62,7 +68,7 @@ function EventsInner() {
         <div>
           <h1 className="text-h1 text-gray-900">Career Events</h1>
           <p className="text-body-md text-gray-500 mt-1">
-            Hackathons, networking, career fairs, and workshops near you — no parties or unrelated socials.
+            Upcoming hackathons, networking, career fairs, and workshops from Unstop, Devfolio, Luma, and more.
           </p>
           <p className="text-body-sm text-gray-500 mt-2 flex items-center gap-1.5">
             <MapPin size={14} className="text-primary-600" />
@@ -84,7 +90,7 @@ function EventsInner() {
         </Button>
       </div>
 
-      <EventFilters typeFacets={typeFacets} total={total} />
+      <EventFilters typeFacets={typeFacets} sourceFacets={sourceFacets} total={total} />
 
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">

@@ -47,6 +47,38 @@ export function matchesUserCity(
   return tokens.some((t) => haystack.includes(t))
 }
 
+/** Infer event category from title (and optional URL hints). */
+export function inferEventTypeFromTitle(
+  title: string,
+  opts?: { defaultType?: EventType | null }
+): EventType | null {
+  const t = title.toLowerCase()
+
+  if (/job\s*fair|career\s*fair|placement\s*drive|recruitment\s*drive|campus\s*drive/i.test(title)) {
+    return 'CAREER_FAIR'
+  }
+  if (/\bhackathon\b|\bideathon\b|\bcoding challenge\b/i.test(title)) {
+    return 'HACKATHON'
+  }
+  if (/\bworkshop\b|\bwebinar\b|\bmasterclass\b|\bbootcamp\b/i.test(title)) {
+    return 'WORKSHOP'
+  }
+  if (
+    /\bnetwork|\bmeetup|\bcommunity|\bfounder|\bbuilder|\bstartup meet|\bcareer connect|\bprofessional mixer|\bconference|\bsummit|\bsymposium/i.test(
+      t
+    )
+  ) {
+    return /\bmeetup|\bmixer|\bcareer connect/i.test(t) ? 'CAREER_SOCIAL' : 'NETWORKING'
+  }
+  if (/case study|innovation|challenge|pitch|competition|hiring challenge/i.test(t)) {
+    if (/hackathon|coding|case study|innovation|challenge|pitch/i.test(t)) return 'HACKATHON'
+    if (/fair|placement|recruit|hiring/i.test(t)) return 'CAREER_FAIR'
+    return 'NETWORKING'
+  }
+
+  return opts?.defaultType ?? null
+}
+
 /** Map a raw Unstop listing into our EventType enum (null = skip). */
 export function mapUnstopEventType(raw: {
   title?: string
@@ -84,6 +116,13 @@ export function mapUnstopEventType(raw: {
   if (/\bhiring challenge|\bpredictions challenge|\bventure arena/i.test(title)) return 'NETWORKING'
 
   return null
+}
+
+/** True when registration is still open / the event hasn't ended yet. */
+export function isUpcomingEvent(event: { endsAt: Date | null; startsAt: Date }): boolean {
+  const now = Date.now()
+  if (event.endsAt) return event.endsAt.getTime() >= now
+  return event.startsAt.getTime() >= now
 }
 
 export const EVENT_TYPE_LABELS: Record<EventType, string> = {

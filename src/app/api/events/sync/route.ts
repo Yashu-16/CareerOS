@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { fetchAllEvents } from '@/lib/events'
+import { deactivateStaleEvents, fetchAllEvents } from '@/lib/events'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-helpers'
 import { ApiErrors } from '@/lib/errors'
@@ -30,12 +30,12 @@ export async function POST() {
       synced++
     }
 
-    if (seen.size > 0) {
-      await prisma.careerEvent.updateMany({
-        where: { source: 'unstop', externalId: { notIn: [...seen] }, isActive: true },
-        data: { isActive: false },
-      })
-    }
+    await deactivateStaleEvents(prisma, events)
+
+    await prisma.careerEvent.updateMany({
+      where: { isActive: true, endsAt: { lt: new Date() } },
+      data: { isActive: false },
+    })
   } catch (err) {
     console.error('[EVENTS_SYNC]', err)
     return ApiErrors.externalDown()

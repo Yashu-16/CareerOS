@@ -3,6 +3,7 @@
 import { Calendar, ExternalLink, MapPin, Users } from 'lucide-react'
 import { SkillTag } from '@/components/ui/Badge'
 import { formatEventDate } from '@/lib/format'
+import { eventSourceMeta } from '@/lib/events/source-meta'
 import type { CareerEventRow } from '@/types'
 
 const TYPE_STYLES: Record<CareerEventRow['type'], string> = {
@@ -22,13 +23,28 @@ const TYPE_LABELS: Record<CareerEventRow['type'], string> = {
 }
 
 export function EventCard({ event }: { event: CareerEventRow }) {
+  const source = eventSourceMeta(event.source, event.url)
+
   return (
     <article className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col h-full">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <span className={`inline-flex text-caption font-medium px-2 py-0.5 rounded-md ${TYPE_STYLES[event.type]}`}>
-            {TYPE_LABELS[event.type]}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`inline-flex text-caption font-medium px-2 py-0.5 rounded-md ${TYPE_STYLES[event.type]}`}>
+              {TYPE_LABELS[event.type]}
+            </span>
+            {source && (
+              <span
+                className={`inline-flex text-caption font-medium px-2 py-0.5 rounded-md ${
+                  source.direct
+                    ? 'bg-success-light text-success border border-success/20'
+                    : 'bg-gray-50 text-gray-600 border border-gray-200'
+                }`}
+              >
+                {source.label}
+              </span>
+            )}
+          </div>
           <h3 className="text-h3 text-gray-900 mt-2 line-clamp-2">{event.title}</h3>
           <p className="text-body-sm text-gray-500 mt-1 truncate">{event.organizer}</p>
         </div>
@@ -37,7 +53,11 @@ export function EventCard({ event }: { event: CareerEventRow }) {
       <div className="space-y-2 mt-4 text-body-sm text-gray-600">
         <p className="flex items-center gap-2">
           <Calendar size={14} className="shrink-0 text-primary-600" />
-          {formatEventDate(event.startsAt, event.endsAt)}
+          {event.endsAt ? (
+            <>Register by {formatEventDate(event.endsAt, null)}</>
+          ) : (
+            <>Starts {formatEventDate(event.startsAt, null)}</>
+          )}
         </p>
         <p className="flex items-center gap-2">
           <MapPin size={14} className="shrink-0 text-primary-600" />
