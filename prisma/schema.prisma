@@ -228,3 +228,34 @@ enum MessageRole {
   USER
   ASSISTANT
 }
+
+enum EventType {
+  HACKATHON
+  NETWORKING
+  CAREER_SOCIAL
+  CAREER_FAIR
+  WORKSHOP
+}
+
+model CareerEvent {
+  id          String    @id @default(cuid())
+  externalId  String    @unique
+  title       String
+  organizer   String
+  type        EventType
+  city        String?
+  state       String?
+  location    String
+  isOnline    Boolean   @default(false)
+  description String    @db.Text
+  skills      String[]
+  url         String
+  source      String    @default("unstop")
+  startsAt    DateTime
+  endsAt      DateTime?
+  isActive    Boolean   @default(true)
+  scrapedAt   DateTime  @default(now())
+
+  @@index([type, city, startsAt])
+  @@map("career_events")
+}

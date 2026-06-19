@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import type { ExperienceLevel } from '@prisma/client'
 
 export const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || 'sk-ant-placeholder',
@@ -22,6 +23,22 @@ export interface ATSAnalysis {
     reason: string
   }>
   summary: string
+}
+
+export interface AIExtractedProfile {
+  name?: string | null
+  city?: string | null
+  college?: string | null
+  degree?: string | null
+  graduationYear?: number | null
+  targetRole?: string | null
+  targetIndustry?: string | null
+  experienceLevel?: ExperienceLevel | null
+  skills?: string[]
+  bio?: string | null
+  linkedinUrl?: string | null
+  githubUrl?: string | null
+  portfolioUrl?: string | null
 }
 
 /**
@@ -58,6 +75,46 @@ Analyze resumes and return ONLY valid JSON with this exact structure:
   "summary": "2-3 sentence overall assessment"
 }
 Score based on: keyword density, quantified achievements, ATS-friendly formatting, relevant skills for the Indian tech market.`
+
+const PROFILE_EXTRACT_PROMPT = `You extract structured career profile data from resumes for the Indian job market.
+Return ONLY valid JSON with this exact structure (use null for unknown fields):
+{
+  "name": string | null,
+  "city": string | null,
+  "college": string | null,
+  "degree": string | null,
+  "graduationYear": number | null,
+  "targetRole": string | null,
+  "targetIndustry": string | null,
+  "experienceLevel": "FRESHER" | "ZERO_TO_TWO" | "TWO_TO_FIVE" | "FIVE_PLUS" | null,
+  "skills": string[],
+  "bio": string | null,
+  "linkedinUrl": string | null,
+  "githubUrl": string | null,
+  "portfolioUrl": string | null
+}
+Infer targetRole from the most recent job title or stated objective. skills should list concrete tools/technologies (max 30). bio is a 1-2 sentence professional summary (max 300 chars).`
+
+export async function extractProfileFromResume(resumeText: string): Promise<AIExtractedProfile> {
+  const runWith = async (model: string) => {
+    const response = await anthropic.messages.create({
+      model,
+      max_tokens: 1200,
+      system: PROFILE_EXTRACT_PROMPT,
+      messages: [{ role: 'user', content: `Resume:\n${resumeText}` }],
+    })
+    const block = response.content[0]
+    const text = block && block.type === 'text' ? block.text : ''
+    return extractJson<AIExtractedProfile>(text)
+  }
+
+  try {
+    return await runWith(FALLBACK_MODEL)
+  } catch (err) {
+    console.error('[ANTHROPIC] Profile extract failed on fallback:', err)
+    return await runWith(PRIMARY_MODEL)
+  }
+}
 
 export async function analyzeResumeATS(
   resumeText: string,

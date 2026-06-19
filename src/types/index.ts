@@ -40,3 +40,20 @@ export interface CareerEvent {
   url: string
   description: string
 }
+
+export interface CareerEventRow {
+  id: string
+  title: string
+  organizer: string
+  type: 'HACKATHON' | 'NETWORKING' | 'CAREER_SOCIAL' | 'CAREER_FAIR' | 'WORKSHOP'
+  city: string | null
+  state: string | null
+  location: string
+  isOnline: boolean
+  description: string
+  skills: string[]
+  url: string
+  source: string
+  startsAt: string
+  endsAt: string | null
+}

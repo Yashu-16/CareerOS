@@ -4,28 +4,28 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
       {/* Left brand panel */}
-      <div className="hidden lg:flex flex-col justify-between bg-primary-600 text-white p-12">
+      <div className="hidden lg:flex flex-col justify-between bg-primary-600 text-gray-900 p-12">
         <Link href="/" className="text-h2 font-bold">
-          CareerOS<span className="text-primary-100"> India</span>
+          CareerOS<span className="text-primary-700"> India</span>
         </Link>
         <div className="max-w-md">
           <h1 className="text-display-lg">Get hired faster with AI.</h1>
-          <p className="text-body-lg text-primary-100 mt-4">
+          <p className="text-body-lg text-gray-800 mt-4">
             Real Indian jobs, ATS resume scoring, semantic matching, and an AI career coach — all in
             one platform built for India.
           </p>
         </div>
-        <div className="flex gap-8 text-body-sm text-primary-100">
+        <div className="flex gap-8 text-body-sm text-gray-800">
           <div>
-            <div className="text-h2 font-bold text-white">10,000+</div>
+            <div className="text-h2 font-bold text-gray-900">10,000+</div>
             Live jobs
           </div>
           <div>
-            <div className="text-h2 font-bold text-white">AI</div>
+            <div className="text-h2 font-bold text-gray-900">AI</div>
             ATS scoring
           </div>
           <div>
-            <div className="text-h2 font-bold text-white">Free</div>
+            <div className="text-h2 font-bold text-gray-900">Free</div>
             To start
           </div>
         </div>

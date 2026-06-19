@@ -6,6 +6,21 @@ import { JobTypeBadge, LocationBadge, MatchBadge, SkillTag } from '@/components/
 import { formatSalary, timeAgo } from '@/lib/format'
 import type { JobWithMatch } from '@/types'
 
+const COMPANY_SOURCES = ['greenhouse', 'lever', 'ashby', 'smartrecruiters']
+const SOURCE_LABELS: Record<string, string> = {
+  linkedin: 'LinkedIn',
+  indeed: 'Indeed',
+  naukri: 'Naukri',
+  internshala: 'Internshala',
+}
+
+/** Describe where a posting came from: direct-from-company vs an aggregator. */
+function sourceMeta(source?: string): { label: string; direct: boolean } | null {
+  if (!source) return null
+  if (COMPANY_SOURCES.includes(source)) return { label: 'Direct from company', direct: true }
+  return { label: SOURCE_LABELS[source] ?? source, direct: false }
+}
+
 export function JobCard({
   job,
   onClick,
@@ -19,6 +34,7 @@ export function JobCard({
 }) {
   const reduced = useReducedMotion()
   const salary = formatSalary(job.salaryMin, job.salaryMax, job.salaryCurrency)
+  const source = sourceMeta((job as { source?: string }).source)
 
   return (
     <motion.div
@@ -62,6 +78,17 @@ export function JobCard({
       <div className="flex flex-wrap items-center gap-2 mt-3">
         <JobTypeBadge type={job.jobType} />
         <LocationBadge type={job.locationType} />
+        {source && (
+          <span
+            className={
+              source.direct
+                ? 'inline-flex items-center px-2 py-0.5 rounded-md text-caption font-medium bg-primary-50 text-primary-700 border border-primary-200'
+                : 'inline-flex items-center px-2 py-0.5 rounded-md text-caption font-medium bg-gray-100 text-gray-600'
+            }
+          >
+            {source.label}
+          </span>
+        )}
         {salary && (
           <span className="text-body-sm font-medium text-success">{salary}</span>
         )}

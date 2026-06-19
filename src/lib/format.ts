@@ -20,3 +20,15 @@ export function timeAgo(date: Date | string): string {
     return ''
   }
 }
+
+/** Human-readable range for event cards. */
+export function formatEventDate(start: Date | string, end?: Date | string | null): string {
+  const s = new Date(start)
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
+  const startStr = s.toLocaleDateString('en-IN', opts)
+  if (!end) return startStr
+  const e = new Date(end)
+  if (Number.isNaN(e.getTime())) return startStr
+  if (s.toDateString() === e.toDateString()) return startStr
+  return `${startStr} – ${e.toLocaleDateString('en-IN', opts)}`
+}

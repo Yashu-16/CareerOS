@@ -42,7 +42,11 @@ export async function searchJobs(params: SearchJobsParams): Promise<any[]> {
   const url = new URL(`${BASE_URL}/search`)
   url.searchParams.set('query', params.query)
   url.searchParams.set('location', params.location || 'India')
-  url.searchParams.set('employment_types', (params.jobType || 'FULLTIME').toUpperCase())
+  // Only constrain employment type when the user actually picked one; otherwise
+  // JSearch returns every type. Our internal enum must be translated to the
+  // values JSearch expects (INTERN / CONTRACTOR), or filtering silently returns nothing.
+  const jsearchType = toJSearchEmploymentType(params.jobType)
+  if (jsearchType) url.searchParams.set('employment_types', jsearchType)
   url.searchParams.set('date_posted', params.datePosted || 'week')
   url.searchParams.set('page', String(params.page || 1))
   url.searchParams.set('num_pages', String(params.numPages || 1))
@@ -62,6 +66,23 @@ export async function searchJobs(params: SearchJobsParams): Promise<any[]> {
   return data.data || []
 }
 
+/**
+ * Translate our internal JobType enum to the employment_types value JSearch
+ * understands. Returns undefined when no specific type is requested so the
+ * search isn't needlessly narrowed.
+ */
+function toJSearchEmploymentType(jobType?: string): string | undefined {
+  if (!jobType) return undefined
+  const map: Record<string, string> = {
+    FULLTIME: 'FULLTIME',
+    PARTTIME: 'PARTTIME',
+    INTERNSHIP: 'INTERN',
+    CONTRACT: 'CONTRACTOR',
+    FREELANCE: 'CONTRACTOR',
+  }
+  return map[jobType.toUpperCase()]
+}
+
 function mapJobType(type?: string): JobType {
   const map: Record<string, JobType> = {
     FULLTIME: 'FULLTIME',
@@ -70,6 +91,21 @@ function mapJobType(type?: string): JobType {
     CONTRACTOR: 'CONTRACT',
   }
   return map[(type || '').toUpperCase()] || 'FULLTIME'
+}
+
+/**
+ * JSearch only emits coarse employment types (FULLTIME / PARTTIME / CONTRACTOR /
+ * INTERN), so "freelance" roles arrive as CONTRACTOR and many part-time roles
+ * arrive as FULLTIME. Refine using the job title, which is the most reliable
+ * signal, so our PARTTIME / FREELANCE / INTERNSHIP filters surface them.
+ */
+function refineJobType(base: JobType, title?: string): JobType {
+  const t = (title || '').toLowerCase()
+  if (/\bfreelance\b/.test(t)) return 'FREELANCE'
+  if (/\bpart[\s-]?time\b/.test(t)) return 'PARTTIME'
+  if (/\b(intern|internship|trainee|apprentice)\b/.test(t)) return 'INTERNSHIP'
+  if (/\b(contract|contractor|temporary|fixed[\s-]?term)\b/.test(t)) return 'CONTRACT'
+  return base
 }
 
 export function normalizeJob(raw: any): NormalizedJob {
@@ -91,7 +127,7 @@ export function normalizeJob(raw: any): NormalizedJob {
     companyLogo: raw.employer_logo || null,
     location,
     locationType: raw.job_is_remote ? 'REMOTE' : 'ONSITE',
-    jobType: mapJobType(raw.job_employment_type),
+    jobType: refineJobType(mapJobType(raw.job_employment_type), raw.job_title),
     salaryMin: raw.job_min_salary ?? null,
     salaryMax: raw.job_max_salary ?? null,
     salaryCurrency: raw.job_salary_currency || 'INR',
