@@ -7,7 +7,9 @@ export default async function OnboardingLayout({ children }: { children: React.R
   const user = await getCurrentUser()
   if (!user) {
     const session = await getServerSession(authOptions)
-    if (session) redirect('/api/auth/signout?callbackUrl=/login')
+    if (session?.user?.id) {
+      redirect('/api/auth/signout?callbackUrl=/login')
+    }
     redirect('/login')
   }
 

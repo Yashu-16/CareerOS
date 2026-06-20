@@ -1,15 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { signIn } from 'next-auth/react'
+import { signIn, signOut, useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
+import { Loader2 } from 'lucide-react'
 
 const schema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -26,12 +27,34 @@ const ERROR_MESSAGES: Record<string, string> = {
 export default function LoginPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { data: session, status } = useSession()
   const [submitting, setSubmitting] = useState(false)
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm<FormData>({ resolver: zodResolver(schema) })
+
+  // Clear stale sessions (JWT present but user removed from DB) instead of redirect loops.
+  useEffect(() => {
+    if (status === 'authenticated' && session?.user?.id) {
+      router.replace('/dashboard')
+    }
+  }, [status, session?.user?.id, router])
+
+  useEffect(() => {
+    if (status === 'authenticated' && !session?.user?.id) {
+      void signOut({ redirect: false })
+    }
+  }, [status, session?.user?.id])
+
+  if (status === 'loading' || (status === 'authenticated' && session?.user?.id)) {
+    return (
+      <p className="text-body-sm text-gray-600 flex items-center justify-center gap-2 py-8">
+        <Loader2 className="animate-spin" size={16} /> Signing you in…
+      </p>
+    )
+  }
 
   const onSubmit = async (data: FormData) => {
     setSubmitting(true)

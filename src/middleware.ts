@@ -3,15 +3,10 @@ import { NextResponse } from 'next/server'
 
 export default withAuth(
   function middleware(req) {
-    const token = req.nextauth.token
     const { pathname } = req.nextUrl
 
-    // Redirect logged-in users away from auth pages (requires a valid user id in JWT).
-    if (token?.id && (pathname.startsWith('/login') || pathname.startsWith('/signup'))) {
-      return NextResponse.redirect(new URL('/dashboard', req.url))
-    }
-
     // Admin-only routes.
+    const token = req.nextauth.token
     if (pathname.startsWith('/admin') && token?.role !== 'ADMIN') {
       return NextResponse.json({ error: true, code: 'FORBIDDEN' }, { status: 403 })
     }
@@ -28,13 +23,13 @@ export default withAuth(
           '/verify-email',
           '/forgot-password',
           '/reset-password',
+          '/extension/connect',
           '/',
           '/api/auth',
         ]
-        if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + '/') || pathname.startsWith(p + '?'))) {
+        if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
           return true
         }
-        // Public landing + auth API are open; everything else requires a token.
         if (pathname === '/') return true
         return !!token?.id
       },

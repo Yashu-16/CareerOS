@@ -10,7 +10,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const user = await getCurrentUser()
   if (!user) {
     const session = await getServerSession(authOptions)
-    if (session) redirect('/api/auth/signout?callbackUrl=/login')
+    if (session?.user?.id) {
+      redirect('/api/auth/signout?callbackUrl=/login')
+    }
     redirect('/login')
   }
 
