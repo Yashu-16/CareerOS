@@ -5,22 +5,19 @@ import { getCurrentUser } from '@/lib/auth-helpers'
 import { ApiErrors } from '@/lib/errors'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { computeFitScore, buildFitProfile } from '@/lib/job-fit'
+import { FIT_SCORE_POOL, JOB_LIST_SELECT, type JobListRow } from '@/lib/job-list-select'
 
 const VALID_TYPES: JobType[] = ['FULLTIME', 'PARTTIME', 'INTERNSHIP', 'CONTRACT', 'FREELANCE']
 const PAGE_SIZE = 20
 
-// Sources that come straight from a company's own ATS career page (direct apply,
-// no aggregator middleman). Grouped under the "Company career pages" source filter.
 const COMPANY_SOURCES = ['greenhouse', 'lever', 'ashby', 'smartrecruiters']
 
-/** Build a Prisma `source` filter from the source filter key. */
 function sourceClause(key: string): Prisma.StringFilter | string | undefined {
   if (!key) return undefined
   if (key === 'company') return { in: COMPANY_SOURCES }
   return key
 }
 
-/** Translate a "date posted" filter key into an earliest-postedAt cutoff. */
 function dateSince(key: string): Date | null {
   const day = 24 * 60 * 60 * 1000
   switch (key) {
@@ -37,11 +34,19 @@ function dateSince(key: string): Date | null {
   }
 }
 
-/**
- * Search the local jobs catalog. The catalog is kept fresh by the sync-jobs
- * cron (direct-from-company boards + JSearch), so reads are fast, free, and
- * cover every source. This avoids burning the JSearch quota on each page load.
- */
+function scoreJobs(jobs: JobListRow[], fitProfile: ReturnType<typeof buildFitProfile>, hasResume: boolean) {
+  const scored = jobs.map((job) => ({
+    ...job,
+    matchScore: computeFitScore(job, fitProfile),
+  }))
+  if (!hasResume) return scored
+  return scored.sort(
+    (a, b) =>
+      (b.matchScore ?? 0) - (a.matchScore ?? 0) ||
+      new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()
+  )
+}
+
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser()
   if (!user) return ApiErrors.unauthorized()
@@ -59,10 +64,6 @@ export async function GET(req: NextRequest) {
   const sourceParam = (searchParams.get('source') || '').toLowerCase()
   const page = Math.min(50, Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1))
 
-  // baseWhere holds the filters shared by every query (search/location/date).
-  // The two facetable dimensions — job type and source — are layered on top so
-  // each facet count can exclude its own dimension (letting the user freely
-  // switch within that dimension) while still respecting the others.
   const baseWhere: Prisma.JobWhereInput = { isActive: true }
   if (location) baseWhere.location = { contains: location, mode: 'insensitive' }
 
@@ -70,7 +71,6 @@ export async function GET(req: NextRequest) {
   if (since) baseWhere.postedAt = { gte: since }
 
   if (q) {
-    // Every search term must match somewhere (title/company/description).
     const terms = q.split(/\s+/).filter((t) => t.length > 1)
     if (terms.length) {
       baseWhere.AND = terms.map((term) => ({
@@ -85,8 +85,6 @@ export async function GET(req: NextRequest) {
 
   const src = sourceClause(sourceParam)
 
-  // typeFacets respect source (but not jobType); sourceFacets respect jobType
-  // (but not source); the main query respects both.
   const typeFacetWhere: Prisma.JobWhereInput = { ...baseWhere }
   if (src) typeFacetWhere.source = src
 
@@ -131,28 +129,33 @@ export async function GET(req: NextRequest) {
     }, {})
 
     const fitProfile = buildFitProfile(profile ?? {}, resume)
+    const hasResume = Boolean(resume?.parsedText)
+    const skip = (page - 1) * PAGE_SIZE
 
-    // Score every matching job, then sort by fit when the user has a parsed resume
-    // so the most relevant roles surface first (not just the newest aggregators).
-    const allMatching = await prisma.job.findMany({ where, orderBy: { postedAt: 'desc' } })
-    const scoredAll = allMatching.map((job) => {
-      const { embedding, ...safe } = job
-      return { ...safe, matchScore: computeFitScore(job, fitProfile) }
-    })
+    let jobs: Array<JobListRow & { matchScore: number }>
 
-    const sorted =
-      resume?.parsedText
-        ? scoredAll.sort(
-            (a, b) =>
-              (b.matchScore ?? 0) - (a.matchScore ?? 0) ||
-              new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()
-          )
-        : scoredAll
-
-    const scored = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    if (hasResume) {
+      // Score a bounded pool, then paginate — avoids loading embeddings or full table scans.
+      const pool = await prisma.job.findMany({
+        where,
+        select: JOB_LIST_SELECT,
+        orderBy: { postedAt: 'desc' },
+        take: FIT_SCORE_POOL,
+      })
+      jobs = scoreJobs(pool, fitProfile, true).slice(skip, skip + PAGE_SIZE)
+    } else {
+      const pageJobs = await prisma.job.findMany({
+        where,
+        select: JOB_LIST_SELECT,
+        orderBy: { postedAt: 'desc' },
+        skip,
+        take: PAGE_SIZE,
+      })
+      jobs = scoreJobs(pageJobs, fitProfile, false)
+    }
 
     return NextResponse.json({
-      jobs: scored,
+      jobs,
       source: 'database',
       total,
       page,

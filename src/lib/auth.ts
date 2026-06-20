@@ -65,12 +65,16 @@ export const authOptions: NextAuthOptions = {
         token.email = user.email
         token.id = user.id
         token.role = user.role
+        token.dbSyncedAt = Date.now()
       }
-      // Always resolve the user id from the DB so stale JWT ids (e.g. after a
-      // database migration) don't point at non-existent rows.
-      if (token.email) {
+      // Re-sync id from DB at most once per minute (handles DB migrations without
+      // hitting Postgres on every session read).
+      const stale =
+        !token.dbSyncedAt || Date.now() - (token.dbSyncedAt as number) > 60_000
+      if (token.email && stale) {
         const dbUser = await prisma.user.findFirst({
           where: { email: token.email, deletedAt: null },
+          select: { id: true, role: true },
         })
         if (dbUser) {
           token.id = dbUser.id
@@ -79,6 +83,7 @@ export const authOptions: NextAuthOptions = {
           delete token.id
           delete token.role
         }
+        token.dbSyncedAt = Date.now()
       }
       return token
     },

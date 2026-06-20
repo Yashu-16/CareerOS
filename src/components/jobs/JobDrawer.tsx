@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { Building2, MapPin, ExternalLink, Bookmark, Check } from 'lucide-react'
+import { Building2, MapPin, ExternalLink, Bookmark, Check, ChevronDown, ChevronUp } from 'lucide-react'
 import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { JobTypeBadge, LocationBadge, MatchBadge, SkillTag } from '@/components/ui/Badge'
+import { SmartApplyPanel } from '@/components/jobs/SmartApplyPanel'
 import { formatSalary, timeAgo } from '@/lib/format'
 import { useToast } from '@/components/ui/Toast'
 import type { JobWithMatch } from '@/types'
@@ -22,6 +23,7 @@ export function JobDrawer({
   const [saved, setSaved] = useState(false)
   const [applied, setApplied] = useState(false)
   const [working, setWorking] = useState(false)
+  const [showSmartApply, setShowSmartApply] = useState(true)
 
   if (!job) return null
   const salary = formatSalary(job.salaryMin, job.salaryMax, job.salaryCurrency)
@@ -79,10 +81,20 @@ export function JobDrawer({
           {salary && <span className="text-body-md font-semibold text-success">{salary}</span>}
         </div>
 
+        <button
+          type="button"
+          onClick={() => setShowSmartApply((v) => !v)}
+          className="mt-4 w-full flex items-center justify-between text-body-sm font-medium text-primary-700"
+        >
+          Smart Apply (tailor + autofill)
+          {showSmartApply ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+        {showSmartApply && <SmartApplyPanel job={job} />}
+
         <div className="flex gap-3 mt-5">
           <a href={job.applyUrl} target="_blank" rel="noopener noreferrer" className="flex-1">
-            <Button fullWidth>
-              Apply now <ExternalLink size={16} />
+            <Button variant="secondary" fullWidth>
+              Quick apply <ExternalLink size={16} />
             </Button>
           </a>
           <Button variant="secondary" onClick={trackApplication} loading={working} disabled={applied}>

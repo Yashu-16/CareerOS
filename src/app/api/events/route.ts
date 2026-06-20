@@ -7,13 +7,26 @@ import type { EventSource } from '@/lib/events'
 import { ApiErrors } from '@/lib/errors'
 
 const VALID_TYPES: EventType[] = ['HACKATHON', 'NETWORKING', 'CAREER_SOCIAL', 'CAREER_FAIR', 'WORKSHOP']
-
 const VALID_SOURCES = Object.keys(EVENT_SOURCE_LABELS) as EventSource[]
 
-/**
- * Career events near the user's city (online events included everywhere).
- * Optional `type` and `source` filters narrow results.
- */
+const EVENT_LIST_SELECT = {
+  id: true,
+  externalId: true,
+  title: true,
+  organizer: true,
+  type: true,
+  city: true,
+  state: true,
+  location: true,
+  isOnline: true,
+  description: true,
+  skills: true,
+  url: true,
+  source: true,
+  startsAt: true,
+  endsAt: true,
+} satisfies Prisma.CareerEventSelect
+
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser()
   if (!user) return ApiErrors.unauthorized()
@@ -27,16 +40,11 @@ export async function GET(req: NextRequest) {
     : undefined
 
   try {
-    const profile = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { city: true },
-    })
-    const userCity = profile?.city?.trim() || null
+    const userCity = user.city?.trim() || null
     const now = new Date()
 
     const where: Prisma.CareerEventWhereInput = {
       isActive: true,
-      // Registration still open, or event start is in the future when no deadline exists.
       OR: [{ endsAt: { gte: now } }, { endsAt: null, startsAt: { gte: now } }],
     }
     if (type) where.type = type
@@ -44,12 +52,14 @@ export async function GET(req: NextRequest) {
 
     const events = await prisma.careerEvent.findMany({
       where,
+      select: EVENT_LIST_SELECT,
       orderBy: [{ endsAt: { sort: 'asc', nulls: 'last' } }, { startsAt: 'asc' }],
-      take: 300,
+      take: 200,
     })
 
-    const upcoming = events.filter((e) => isUpcomingEvent(e))
-    const locationMatched = upcoming.filter((e) => matchesUserCity(userCity, e))
+    const locationMatched = events.filter(
+      (e) => isUpcomingEvent(e) && matchesUserCity(userCity, e)
+    )
 
     const typeFacets = locationMatched.reduce<Record<string, number>>((acc, e) => {
       acc[e.type] = (acc[e.type] || 0) + 1

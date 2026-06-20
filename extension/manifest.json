@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "CareerOS Autofill",
+  "version": "1.0.0",
+  "description": "Autofill job applications with your CareerOS profile and tailored resume.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "https://*.careeros.in/*",
+    "https://boards.greenhouse.io/*",
+    "https://jobs.lever.co/*",
+    "https://jobs.ashbyhq.com/*",
+    "https://*.myworkdayjobs.com/*",
+    "https://*.smartrecruiters.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "CareerOS Autofill"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:3000/*", "https://*.careeros.in/*"],
+      "js": ["careeros-bridge.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://boards.greenhouse.io/*",
+        "https://jobs.lever.co/*",
+        "https://jobs.ashbyhq.com/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://*.smartrecruiters.com/*",
+        "https://www.linkedin.com/jobs/*",
+        "https://*.indeed.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

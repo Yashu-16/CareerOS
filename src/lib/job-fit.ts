@@ -1,6 +1,7 @@
 import type { Job } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { extractSkillsFromText } from '@/lib/resume-skills'
+import { FIT_SCORE_POOL, JOB_LIST_SELECT } from '@/lib/job-list-select'
 
 /**
  * Profile signals used to score how well a user fits a job. All fields are
@@ -176,15 +177,13 @@ export async function getTopMatchedJobs(userId: string, limit = 10) {
   const fitProfile = await loadFitProfile(userId)
   const jobs = await prisma.job.findMany({
     where: { isActive: true },
+    select: JOB_LIST_SELECT,
     orderBy: { postedAt: 'desc' },
-    take: 400,
+    take: FIT_SCORE_POOL,
   })
 
   return jobs
-    .map((job) => {
-      const { embedding, ...safe } = job
-      return { ...safe, matchScore: computeFitScore(job, fitProfile) }
-    })
+    .map((job) => ({ ...job, matchScore: computeFitScore(job, fitProfile) }))
     .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
     .slice(0, limit)
 }
