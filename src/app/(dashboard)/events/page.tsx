@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { MapPin, RefreshCw } from 'lucide-react'
@@ -8,55 +8,44 @@ import { EventCard } from '@/components/events/EventCard'
 import { EventFilters } from '@/components/events/EventFilters'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Button } from '@/components/ui/Button'
+import { useCachedFetch } from '@/hooks/useCachedFetch'
 import type { CareerEventRow } from '@/types'
+
+interface EventsApiResponse {
+  events: CareerEventRow[]
+  city?: string | null
+  typeFacets?: Record<string, number>
+  sourceFacets?: Record<string, number>
+  total?: number
+}
 
 function EventsInner() {
   const searchParams = useSearchParams()
-  const [events, setEvents] = useState<CareerEventRow[]>([])
-  const [city, setCity] = useState<string | null>(null)
-  const [typeFacets, setTypeFacets] = useState<Record<string, number>>({})
-  const [sourceFacets, setSourceFacets] = useState<Record<string, number>>({})
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
 
-  const fetchEvents = useCallback(async () => {
-    setLoading(true)
-    try {
-      const type = searchParams.get('type') || ''
-      const source = searchParams.get('source') || ''
-      const qs = new URLSearchParams()
-      if (type) qs.set('type', type)
-      if (source) qs.set('source', source)
-      const suffix = qs.toString() ? `?${qs.toString()}` : ''
-      const res = await fetch(`/api/events${suffix}`)
-      const text = await res.text()
-      if (!text) throw new Error('Empty response from server')
-      const data = JSON.parse(text)
-      if (!res.ok) throw new Error(data.message || 'Failed to load events')
-      setEvents(data.events || [])
-      setCity(data.city ?? null)
-      setTypeFacets(data.typeFacets || {})
-      setSourceFacets(data.sourceFacets || {})
-      setTotal(data.total ?? (data.events?.length || 0))
-    } catch (err) {
-      console.error('[Events]', err)
-      setEvents([])
-      setTotal(0)
-    } finally {
-      setLoading(false)
-    }
+  const query = useMemo(() => {
+    const type = searchParams.get('type') || ''
+    const source = searchParams.get('source') || ''
+    const qs = new URLSearchParams()
+    if (type) qs.set('type', type)
+    if (source) qs.set('source', source)
+    return qs.toString()
   }, [searchParams])
 
-  useEffect(() => {
-    fetchEvents()
-  }, [fetchEvents])
+  const url = `/api/events${query ? `?${query}` : ''}`
+  const { data, loading, reload } = useCachedFetch<EventsApiResponse>(`events:${query}`, url)
+
+  const events = data?.events || []
+  const city = data?.city ?? null
+  const typeFacets = data?.typeFacets || {}
+  const sourceFacets = data?.sourceFacets || {}
+  const total = data?.total ?? events.length
 
   const refreshCatalog = async () => {
     setSyncing(true)
     try {
       await fetch('/api/events/sync', { method: 'POST' })
-      await fetchEvents()
+      await reload(false)
     } finally {
       setSyncing(false)
     }
@@ -92,7 +81,7 @@ function EventsInner() {
 
       <EventFilters typeFacets={typeFacets} sourceFacets={sourceFacets} total={total} />
 
-      {loading ? (
+      {loading && !events.length ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-56 rounded-xl" />

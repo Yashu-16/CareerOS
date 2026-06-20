@@ -5,7 +5,7 @@ import { getCurrentUser } from '@/lib/auth-helpers'
 import { ApiErrors } from '@/lib/errors'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { computeFitScore, buildFitProfile } from '@/lib/job-fit'
-import { FIT_SCORE_POOL, JOB_LIST_SELECT, type JobListRow } from '@/lib/job-list-select'
+import { FIT_SCORE_POOL, JOB_FIT_SCORE_SELECT, JOB_LIST_SELECT, type JobListRow } from '@/lib/job-list-select'
 
 const VALID_TYPES: JobType[] = ['FULLTIME', 'PARTTIME', 'INTERNSHIP', 'CONTRACT', 'FREELANCE']
 const PAGE_SIZE = 20
@@ -63,6 +63,7 @@ export async function GET(req: NextRequest) {
   const datePosted = searchParams.get('datePosted') || ''
   const sourceParam = (searchParams.get('source') || '').toLowerCase()
   const page = Math.min(50, Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1))
+  const includeFacets = searchParams.get('facets') !== '0' && page === 1
 
   const baseWhere: Prisma.JobWhereInput = { isActive: true }
   if (location) baseWhere.location = { contains: location, mode: 'insensitive' }
@@ -96,37 +97,57 @@ export async function GET(req: NextRequest) {
   if (src) where.source = src
 
   try {
+    const profilePromise = prisma.user.findUnique({
+      where: { id: user.id },
+      select: { skills: true, targetRole: true, experienceLevel: true, city: true },
+    })
+    const resumePromise = prisma.resume.findFirst({
+      where: { userId: user.id, isActive: true },
+      select: { parsedText: true },
+    })
+    const totalPromise = includeFacets || page === 1 ? prisma.job.count({ where }) : Promise.resolve(0)
+
+    const facetPromises = includeFacets
+      ? [
+          prisma.job.groupBy({
+            by: ['jobType'],
+            where: typeFacetWhere,
+            _count: { _all: true },
+          }),
+          prisma.job.groupBy({
+            by: ['source'],
+            where: sourceFacetWhere,
+            _count: { _all: true },
+          }),
+        ]
+      : [Promise.resolve([]), Promise.resolve([])]
+
     const [total, profile, resume, typeGroups, sourceGroups] = await Promise.all([
-      prisma.job.count({ where }),
-      prisma.user.findUnique({
-        where: { id: user.id },
-        select: { skills: true, targetRole: true, experienceLevel: true, city: true },
-      }),
-      prisma.resume.findFirst({
-        where: { userId: user.id, isActive: true },
-        select: { parsedText: true },
-      }),
-      prisma.job.groupBy({
-        by: ['jobType'],
-        where: typeFacetWhere,
-        _count: { _all: true },
-      }),
-      prisma.job.groupBy({
-        by: ['source'],
-        where: sourceFacetWhere,
-        _count: { _all: true },
-      }),
+      totalPromise,
+      profilePromise,
+      resumePromise,
+      ...facetPromises,
     ])
 
-    const typeFacets = typeGroups.reduce<Record<string, number>>((acc, g) => {
-      acc[g.jobType] = g._count._all
-      return acc
-    }, {})
+    const typeFacets = includeFacets
+      ? (typeGroups as { jobType: string; _count: { _all: number } }[]).reduce<Record<string, number>>(
+          (acc, g) => {
+            acc[g.jobType] = g._count._all
+            return acc
+          },
+          {}
+        )
+      : undefined
 
-    const sourceFacets = sourceGroups.reduce<Record<string, number>>((acc, g) => {
-      acc[g.source] = g._count._all
-      return acc
-    }, {})
+    const sourceFacets = includeFacets
+      ? (sourceGroups as { source: string; _count: { _all: number } }[]).reduce<Record<string, number>>(
+          (acc, g) => {
+            acc[g.source] = g._count._all
+            return acc
+          },
+          {}
+        )
+      : undefined
 
     const fitProfile = buildFitProfile(profile ?? {}, resume)
     const hasResume = Boolean(resume?.parsedText)
@@ -138,11 +159,16 @@ export async function GET(req: NextRequest) {
       // Score a bounded pool, then paginate — avoids loading embeddings or full table scans.
       const pool = await prisma.job.findMany({
         where,
-        select: JOB_LIST_SELECT,
+        select: JOB_FIT_SCORE_SELECT,
         orderBy: { postedAt: 'desc' },
         take: FIT_SCORE_POOL,
       })
-      jobs = scoreJobs(pool, fitProfile, true).slice(skip, skip + PAGE_SIZE)
+      jobs = scoreJobs(pool, fitProfile, true)
+        .slice(skip, skip + PAGE_SIZE)
+        .map((job) => {
+          const { description: _omit, ...rest } = job as typeof job & { description?: string }
+          return rest
+        })
     } else {
       const pageJobs = await prisma.job.findMany({
         where,
@@ -154,16 +180,23 @@ export async function GET(req: NextRequest) {
       jobs = scoreJobs(pageJobs, fitProfile, false)
     }
 
-    return NextResponse.json({
-      jobs,
-      source: 'database',
-      total,
-      page,
-      pageSize: PAGE_SIZE,
-      hasMore: page * PAGE_SIZE < total,
-      typeFacets,
-      sourceFacets,
-    })
+    return NextResponse.json(
+      {
+        jobs,
+        source: 'database',
+        total: total || undefined,
+        page,
+        pageSize: PAGE_SIZE,
+        hasMore: total ? page * PAGE_SIZE < total : jobs.length === PAGE_SIZE,
+        typeFacets,
+        sourceFacets,
+      },
+      {
+        headers: {
+          'Cache-Control': 'private, max-age=15, stale-while-revalidate=30',
+        },
+      }
+    )
   } catch (error) {
     console.error('[JOBS] search failed:', error)
     return ApiErrors.database()

@@ -19,7 +19,6 @@ const EVENT_LIST_SELECT = {
   state: true,
   location: true,
   isOnline: true,
-  description: true,
   skills: true,
   url: true,
   source: true,
@@ -71,15 +70,18 @@ export async function GET(req: NextRequest) {
       return acc
     }, {})
 
-    return NextResponse.json({
-      events: locationMatched,
-      city: userCity,
-      typeFacets,
-      sourceFacets,
-      typeLabels: EVENT_TYPE_LABELS,
-      sourceLabels: EVENT_SOURCE_LABELS,
-      total: locationMatched.length,
-    })
+    return NextResponse.json(
+      {
+        events: locationMatched,
+        city: userCity,
+        typeFacets,
+        sourceFacets,
+        typeLabels: EVENT_TYPE_LABELS,
+        sourceLabels: EVENT_SOURCE_LABELS,
+        total: locationMatched.length,
+      },
+      { headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' } }
+    )
   } catch (error) {
     console.error('[EVENTS]', error)
     return ApiErrors.database()

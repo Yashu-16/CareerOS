@@ -1,7 +1,7 @@
 import type { Job } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { extractSkillsFromText } from '@/lib/resume-skills'
-import { FIT_SCORE_POOL, JOB_LIST_SELECT } from '@/lib/job-list-select'
+import { FIT_SCORE_POOL, JOB_FIT_SCORE_SELECT, JOB_LIST_SELECT } from '@/lib/job-list-select'
 
 /**
  * Profile signals used to score how well a user fits a job. All fields are
@@ -96,10 +96,12 @@ export async function loadFitProfile(userId: string): Promise<FitProfile> {
  * heavily so scores reflect actual resume content.
  */
 export function computeFitScore(
-  job: Pick<Job, 'title' | 'company' | 'description' | 'skills' | 'location' | 'locationType'>,
+  job: Pick<Job, 'title' | 'company' | 'skills' | 'location' | 'locationType'> & {
+    description?: string | null
+  },
   profile: FitProfile
 ): number {
-  const haystack = `${job.title} ${job.company} ${job.description} ${(job.skills || []).join(' ')} ${job.location}`.toLowerCase()
+  const haystack = `${job.title} ${job.company} ${job.description || ''} ${(job.skills || []).join(' ')} ${job.location}`.toLowerCase()
   const titleText = (job.title || '').toLowerCase()
   const hasResume = Boolean(profile.resumeText?.trim())
 
@@ -127,7 +129,7 @@ export function computeFitScore(
   // --- Resume keyword overlap (primary signal when resume exists) ---
   if (profile.resumeText) {
     const resumeTokens = uniqueTokens(profile.resumeText).filter((t) => t.length > 3 && !STOPWORDS.has(t))
-    const jobTokens = uniqueTokens(`${job.title} ${job.description} ${(job.skills || []).join(' ')}`)
+    const jobTokens = uniqueTokens(`${job.title} ${job.description || ''} ${(job.skills || []).join(' ')}`)
     if (resumeTokens.length && jobTokens.length) {
       const resumeSet = new Set(resumeTokens)
       let overlap = 0
@@ -177,13 +179,16 @@ export async function getTopMatchedJobs(userId: string, limit = 10) {
   const fitProfile = await loadFitProfile(userId)
   const jobs = await prisma.job.findMany({
     where: { isActive: true },
-    select: JOB_LIST_SELECT,
+    select: JOB_FIT_SCORE_SELECT,
     orderBy: { postedAt: 'desc' },
     take: FIT_SCORE_POOL,
   })
 
   return jobs
-    .map((job) => ({ ...job, matchScore: computeFitScore(job, fitProfile) }))
+    .map((job) => {
+      const { description: _d, ...rest } = job
+      return { ...rest, matchScore: computeFitScore(job, fitProfile) }
+    })
     .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0))
     .slice(0, limit)
 }

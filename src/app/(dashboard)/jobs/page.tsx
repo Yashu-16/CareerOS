@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { JobGrid } from '@/components/jobs/JobGrid'
 import { JobFilters } from '@/components/jobs/JobFilters'
@@ -8,91 +8,121 @@ import { JobSearch } from '@/components/jobs/JobSearch'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Button } from '@/components/ui/Button'
 import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
+import { useCachedFetch } from '@/hooks/useCachedFetch'
 import type { JobWithMatch } from '@/types'
 
+interface JobsApiResponse {
+  jobs: JobWithMatch[]
+  total?: number
+  hasMore?: boolean
+  typeFacets?: Record<string, number>
+  sourceFacets?: Record<string, number>
+  warning?: string
+}
+
 function JobsInner() {
-  const [jobs, setJobs] = useState<JobWithMatch[]>([])
-  const [total, setTotal] = useState<number | null>(null)
-  const [typeFacets, setTypeFacets] = useState<Record<string, number> | undefined>(undefined)
-  const [sourceFacets, setSourceFacets] = useState<Record<string, number> | undefined>(undefined)
-  const [hasMore, setHasMore] = useState(false)
+  const searchParams = useSearchParams()
+  const [extraJobs, setExtraJobs] = useState<JobWithMatch[]>([])
   const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(true)
+  const [hasMorePages, setHasMorePages] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
-  const searchParams = useSearchParams()
 
   const buildParams = useCallback(
-    (pageNum: number) =>
-      new URLSearchParams({
+    (pageNum: number, withFacets: boolean) => {
+      const p = new URLSearchParams({
         q: searchParams.get('q') || '',
         location: searchParams.get('location') || '',
         jobType: searchParams.get('jobType') || '',
         datePosted: searchParams.get('datePosted') || '',
         source: searchParams.get('source') || '',
         page: String(pageNum),
-      }),
+      })
+      if (!withFacets) p.set('facets', '0')
+      return p.toString()
+    },
     [searchParams]
   )
 
-  // Initial load / re-load whenever the search or filters change.
-  const fetchFirstPage = useCallback(async () => {
-    setLoading(true)
-    setWarning(null)
-    try {
-      const res = await fetch(`/api/jobs?${buildParams(1)}`)
-      const data = await res.json()
-      setJobs(data.jobs || [])
-      setTotal(typeof data.total === 'number' ? data.total : null)
-      setTypeFacets(data.typeFacets)
-      setSourceFacets(data.sourceFacets)
-      setHasMore(Boolean(data.hasMore))
-      setPage(1)
-      setWarning(data.warning || null)
-    } catch {
-      setWarning('Unable to load jobs. Please try again shortly.')
-    } finally {
-      setLoading(false)
-    }
-  }, [buildParams])
+  const listKey = useMemo(() => buildParams(1, true), [buildParams])
+  const listUrl = `/api/jobs?${listKey}`
 
-  const loadMore = useCallback(async () => {
+  const { data, loading, reload } = useCachedFetch<JobsApiResponse>(
+    `jobs:${listKey}`,
+    listUrl
+  )
+
+  useEffect(() => {
+    setExtraJobs([])
+    setPage(1)
+  }, [listKey])
+
+  useEffect(() => {
+    if (data) setHasMorePages(Boolean(data.hasMore))
+  }, [data])
+
+  const jobs = [...(data?.jobs || []), ...extraJobs]
+  const total = data?.total ?? null
+  const typeFacets = data?.typeFacets
+  const sourceFacets = data?.sourceFacets
+  const hasMore = hasMorePages
+
+  const resetAndReload = useCallback(async () => {
+    setExtraJobs([])
+    setPage(1)
+    setWarning(null)
+    await reload(false)
+  }, [reload])
+
+  const loadMore = async () => {
     const next = page + 1
     setLoadingMore(true)
     try {
-      const res = await fetch(`/api/jobs?${buildParams(next)}`)
-      const data = await res.json()
-      setJobs((prev) => [...prev, ...(data.jobs || [])])
-      setHasMore(Boolean(data.hasMore))
+      const res = await fetch(`/api/jobs?${buildParams(next, false)}`)
+      const payload = (await res.json()) as JobsApiResponse
+      setExtraJobs((prev) => [...prev, ...(payload.jobs || [])])
       setPage(next)
+      setHasMorePages(Boolean(payload.hasMore))
     } catch {
       setWarning('Unable to load more jobs. Please try again shortly.')
     } finally {
       setLoadingMore(false)
     }
-  }, [page, buildParams])
-
-  useEffect(() => {
-    fetchFirstPage()
-  }, [fetchFirstPage])
+  }
 
   const refreshCatalog = async () => {
+    setSyncing(true)
+    setExtraJobs([])
+    setPage(1)
+    await resetAndReload()
+    setSyncing(false)
+  }
+
+  const syncCatalog = async () => {
     setSyncing(true)
     setWarning(null)
     try {
       const res = await fetch('/api/jobs/sync', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message || 'Sync failed')
-      await fetchFirstPage()
+      if (!res.ok) throw new Error('Sync failed')
+      setExtraJobs([])
+      setPage(1)
+      await reload(false)
     } catch {
-      setWarning('Unable to refresh the job catalog. Please try again shortly.')
+      setWarning('Background sync is rate-limited. Jobs refresh automatically every few hours.')
     } finally {
       setSyncing(false)
     }
   }
 
-  const catalogEmpty = !loading && total === 0 && !searchParams.get('q') && !searchParams.get('location') && !searchParams.get('jobType') && !searchParams.get('source') && !searchParams.get('datePosted')
+  const catalogEmpty =
+    !loading &&
+    total === 0 &&
+    !searchParams.get('q') &&
+    !searchParams.get('location') &&
+    !searchParams.get('jobType') &&
+    !searchParams.get('source') &&
+    !searchParams.get('datePosted')
 
   return (
     <div className="space-y-6">
@@ -101,17 +131,17 @@ function JobsInner() {
           <h1 className="text-h1 text-gray-900">Job Discovery</h1>
           <p className="text-body-md text-gray-500 mt-1">
             {total !== null
-              ? `${total.toLocaleString('en-IN')} live roles from company career pages, LinkedIn, Indeed & Naukri.`
-              : 'Real Indian jobs from company career pages, LinkedIn, Indeed & Naukri.'}
+              ? `${total.toLocaleString('en-IN')} roles from our database (updated on a schedule from company career pages & job boards).`
+              : 'Jobs are loaded from our database — refreshed automatically in the background.'}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Button variant="secondary" onClick={refreshCatalog} loading={syncing}>
-            <RefreshCw size={16} /> Refresh jobs
+            <RefreshCw size={16} /> Reload jobs
           </Button>
-          {warning && (
+          {(warning || data?.warning) && (
             <div className="bg-warning-light text-warning text-body-sm px-4 py-2 rounded-lg border border-warning/20 flex items-center gap-2">
-              <AlertTriangle size={16} /> {warning}
+              <AlertTriangle size={16} /> {warning || data?.warning}
             </div>
           )}
         </div>
@@ -122,7 +152,7 @@ function JobsInner() {
       <div className="flex gap-6">
         <JobFilters typeFacets={typeFacets} sourceFacets={sourceFacets} />
         <div className="flex-1 min-w-0">
-          {loading ? (
+          {loading && !jobs.length ? (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {Array.from({ length: 6 }).map((_, i) => (
                 <Skeleton key={i} className="h-52 rounded-xl" />
@@ -130,7 +160,7 @@ function JobsInner() {
             </div>
           ) : (
             <>
-              <JobGrid jobs={jobs} catalogEmpty={catalogEmpty} onRefresh={refreshCatalog} syncing={syncing} />
+              <JobGrid jobs={jobs} catalogEmpty={catalogEmpty} onRefresh={syncCatalog} syncing={syncing} />
 
               {(hasMore || jobs.length > 0) && (
                 <div className="flex flex-col items-center gap-2 mt-6">
