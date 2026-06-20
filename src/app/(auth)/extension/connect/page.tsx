@@ -1,11 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { Loader2 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 type ConnectState = 'loading' | 'needs_login' | 'ready' | 'connecting' | 'success' | 'error'
 
@@ -24,7 +25,7 @@ declare global {
   }
 }
 
-export default function ExtensionConnectPage() {
+function ExtensionConnectInner() {
   const searchParams = useSearchParams()
   const extensionId = searchParams.get('extensionId')
   const { status } = useSession()
@@ -170,5 +171,13 @@ export default function ExtensionConnectPage() {
         </>
       )}
     </div>
+  )
+}
+
+export default function ExtensionConnectPage() {
+  return (
+    <Suspense fallback={<Skeleton className="h-48 rounded-xl" />}>
+      <ExtensionConnectInner />
+    </Suspense>
   )
 }

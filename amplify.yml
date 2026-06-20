@@ -4,9 +4,9 @@ frontend:
     preBuild:
       commands:
         - npm ci --cache .npm --prefer-offline
-        - node scripts/prisma-generate.mjs
     build:
       commands:
+        - env | grep -E '^(DATABASE_URL|NEXTAUTH_SECRET|NEXTAUTH_URL|NEXT_PUBLIC_APP_URL)=' || echo "Warning some core env vars may be missing — set them in Amplify Console"
         - npm run build
   artifacts:
     baseDirectory: .next
