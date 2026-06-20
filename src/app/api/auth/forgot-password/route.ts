@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { storeAuthToken, logDevAuthLink } from '@/lib/auth-tokens'
-import { sendPasswordResetEmail } from '@/lib/sendgrid'
+import { sendPasswordResetEmail } from '@/lib/email'
+import { getAppBaseUrlFromRequest } from '@/lib/app-url'
 import { ApiErrors } from '@/lib/errors'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
     if (!user || !user.password) return NextResponse.json(GENERIC)
 
     const token = await storeAuthToken('pw-reset', user.id, 3600)
-    const url = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${token}`
+    const url = `${getAppBaseUrlFromRequest(req)}/reset-password?token=${token}`
     logDevAuthLink('Password reset link', url)
     await sendPasswordResetEmail(user.email, user.name, url)
 

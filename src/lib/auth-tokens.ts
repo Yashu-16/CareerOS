@@ -53,8 +53,8 @@ export async function consumeAuthToken(
   return record.userId
 }
 
-/** Log auth links locally when email is not configured (dev convenience). */
+/** Log auth links when email is not configured (dev / missing SendGrid). */
 export function logDevAuthLink(label: string, url: string) {
-  if (process.env.SENDGRID_API_KEY?.trim()) return
-  console.warn(`[AUTH] ${label} (SendGrid not configured):`, url)
+  if (process.env.RESEND_API_KEY?.trim() || process.env.SENDGRID_API_KEY?.trim()) return
+  console.warn(`[AUTH] ${label} (email not configured — copy this link manually):`, url)
 }

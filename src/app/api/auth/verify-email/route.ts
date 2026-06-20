@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { consumeAuthToken } from '@/lib/auth-tokens'
-import { sendWelcomeEmail } from '@/lib/sendgrid'
+import { sendWelcomeEmail } from '@/lib/email'
 import { ApiErrors, auditLog } from '@/lib/errors'
 
 const schema = z.object({ token: z.string().min(10) })
