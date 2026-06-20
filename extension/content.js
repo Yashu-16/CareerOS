@@ -106,15 +106,85 @@ async function downloadAndAttachResume(profile, baseUrl, token) {
   }
 }
 
-function getJobIdFromContext() {
+function getStorage(keys) {
   return new Promise((resolve) => {
-    chrome.storage.sync.get(['pendingJobId'], (data) => resolve(data.pendingJobId || null))
+    const finish = (local, sync) => resolve({ ...sync, ...local })
+
+    if (typeof chrome === 'undefined' || !chrome.storage?.local) {
+      finish({}, {})
+      return
+    }
+
+    chrome.storage.local.get(keys, (local) => {
+      if (chrome.storage?.sync) {
+        chrome.storage.sync.get(keys, (sync) => finish(local, sync))
+      } else {
+        finish(local, {})
+      }
+    })
   })
 }
 
+function getJobIdFromContext() {
+  return getStorage(['activeTabJobId', 'pendingJobId', 'pendingApplyUrl']).then((data) => {
+    if (data.activeTabJobId) return data.activeTabJobId
+    if (data.pendingJobId && data.pendingApplyUrl) {
+      if (normalizeApplyUrl(data.pendingApplyUrl) === normalizeApplyUrl(location.href)) {
+        return data.pendingJobId
+      }
+    }
+    return null
+  })
+}
+
+async function resolveAndStoreTabJob() {
+  if (!isAtsUrl(location.href)) return null
+
+  const { baseUrl, token } = await getStorage(['baseUrl', 'token'])
+  if (!token) return null
+
+  const page = scrapePageJobMeta()
+  const resolved = await new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      {
+        type: 'RESOLVE_JOB',
+        baseUrl: baseUrl || 'http://localhost:3000',
+        token,
+        url: page.applyUrl,
+        pageTitle: page.title,
+        pageCompany: page.company,
+      },
+      (res) => (res?.ok ? resolve(res) : reject(new Error(res?.error || 'resolve failed')))
+    )
+  })
+
+  await new Promise((resolve) => {
+    chrome.storage.local.set(
+      {
+        activeTabApplyUrl: page.normalizedUrl,
+        activeTabJobId: resolved.jobId || null,
+        activeTabTitle: resolved.job?.title || page.title || resolved.pageOnly?.title || null,
+        activeTabCompany: resolved.job?.company || page.company || resolved.pageOnly?.company || null,
+      },
+      resolve
+    )
+  })
+
+  return resolved
+}
+
 async function runAutofill() {
-  const { baseUrl, token } = await chrome.storage.sync.get(['baseUrl', 'token'])
-  if (!token) return { ok: false, message: 'Connect your extension token in the popup.' }
+  const { baseUrl, token } = await getStorage(['baseUrl', 'token'])
+  if (!token) {
+    return {
+      ok: false,
+      message: 'Connect your CareerOS account in the extension popup (one-time sign-in).',
+    }
+  }
+
+  if (isAtsUrl(location.href)) {
+    await resolveAndStoreTabJob()
+  }
 
   const jobId = await getJobIdFromContext()
   const profile = await new Promise((resolve, reject) => {
@@ -166,6 +236,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .catch((err) => sendResponse({ ok: false, message: String(err) }))
     return true
   }
+  if (msg.type === 'GET_PAGE_JOB_CONTEXT') {
+    const page = scrapePageJobMeta()
+    if (page.isAtsPage && msg.resolve) {
+      resolveAndStoreTabJob()
+        .then((resolved) => sendResponse({ ok: true, page, resolved }))
+        .catch((err) => sendResponse({ ok: true, page, resolved: null, error: String(err) }))
+      return true
+    }
+    sendResponse({ ok: true, page })
+    return true
+  }
 })
 
 // Floating button on application pages
@@ -179,9 +260,9 @@ function injectFab() {
     bottom: '80px',
     right: '20px',
     zIndex: '2147483646',
-    background: '#111',
-    color: '#6be82c',
-    border: '2px solid #6be82c',
+    background: '#6be82c',
+    color: '#111',
+    border: 'none',
     padding: '10px 16px',
     borderRadius: '999px',
     fontWeight: '700',
@@ -193,7 +274,19 @@ function injectFab() {
 }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', injectFab)
+  document.addEventListener('DOMContentLoaded', () => {
+    injectFab()
+    resolveAndStoreTabJob().catch(() => {})
+  })
 } else {
   injectFab()
+  resolveAndStoreTabJob().catch(() => {})
 }
+
+let lastSyncedUrl = location.href
+setInterval(() => {
+  if (location.href !== lastSyncedUrl) {
+    lastSyncedUrl = location.href
+    resolveAndStoreTabJob().catch(() => {})
+  }
+}, 1500)

@@ -40,7 +40,8 @@ export function SmartApplyPanel({ job }: { job: JobWithMatch }) {
   const [tailored, setTailored] = useState<TailorState | null>(null)
   const [resumeInfo, setResumeInfo] = useState<ResumeInfo | null>(null)
   const [tracked, setTracked] = useState(false)
-  const [extToken, setExtToken] = useState<string | null>(null)
+  const [extensionId, setExtensionId] = useState<string | null>(null)
+  const [extensionConnected, setExtensionConnected] = useState(false)
 
   const canTailor = resumeInfo?.isDocx === true
 
@@ -71,6 +72,17 @@ export function SmartApplyPanel({ job }: { job: JobWithMatch }) {
     setTracked(false)
     loadExisting()
   }, [job.id, loadExisting])
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'CAREEROS_EXTENSION_PRESENT') {
+        setExtensionId(event.data.extensionId || null)
+      }
+    }
+    window.addEventListener('message', onMessage)
+    window.postMessage({ type: 'CAREEROS_EXTENSION_PING' }, '*')
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
 
   const tailorResume = async () => {
     setStep('tailoring')
@@ -108,20 +120,13 @@ export function SmartApplyPanel({ job }: { job: JobWithMatch }) {
     }
   }
 
-  const connectExtension = async () => {
-    const res = await fetch('/api/apply/extension-token', { method: 'POST' })
-    const data = await res.json()
-    if (!res.ok) {
-      toast(data.message || 'Could not create extension token', 'error')
-      return
-    }
-    setExtToken(data.token)
-    try {
-      await navigator.clipboard.writeText(data.token)
-      toast('Extension token copied — paste it in the CareerOS Autofill popup.', 'success')
-    } catch {
-      toast('Copy the token shown below into the extension.', 'info')
-    }
+  const connectExtension = () => {
+    const url = extensionId
+      ? `/extension/connect?extensionId=${encodeURIComponent(extensionId)}`
+      : '/extension/connect'
+    window.open(url, '_blank', 'noopener,noreferrer,width=480,height=640')
+    setExtensionConnected(true)
+    toast('Sign in once in the new tab — your extension stays connected.', 'success')
   }
 
   const downloadTailored = async () => {
@@ -167,14 +172,26 @@ export function SmartApplyPanel({ job }: { job: JobWithMatch }) {
     }
 
     if (typeof window !== 'undefined') {
-      window.postMessage(
-        {
-          type: 'CAREEROS_SET_APPLY_CONTEXT',
-          jobId: job.id,
-          applyUrl: job.applyUrl,
-        },
-        '*'
-      )
+      const applyContext = {
+        jobId: job.id,
+        applyUrl: job.applyUrl,
+        jobTitle: job.title,
+        company: job.company,
+      }
+      try {
+        localStorage.setItem(
+          'careeros_apply_context',
+          JSON.stringify({
+            pendingJobId: applyContext.jobId,
+            pendingApplyUrl: applyContext.applyUrl,
+            pendingJobTitle: applyContext.jobTitle,
+            pendingCompany: applyContext.company,
+          })
+        )
+      } catch {
+        /* non-blocking */
+      }
+      window.postMessage({ type: 'CAREEROS_SET_APPLY_CONTEXT', ...applyContext }, '*')
     }
 
     window.open(job.applyUrl, '_blank', 'noopener,noreferrer')
@@ -281,14 +298,16 @@ export function SmartApplyPanel({ job }: { job: JobWithMatch }) {
             <p className="text-caption font-medium text-gray-700 uppercase tracking-wide">Step 3 · Autofill form</p>
             <ol className="text-body-sm text-gray-600 space-y-1 list-decimal list-inside">
               <li>Install the CareerOS Autofill extension (see <code className="text-xs bg-white px-1 rounded">extension/</code> folder)</li>
-              <li>Connect once with your token</li>
+              <li>Connect once — no token to copy</li>
               <li>Open the job application & click <strong>Autofill</strong></li>
             </ol>
             <Button variant="secondary" type="button" onClick={connectExtension} className="w-full">
-              <Puzzle size={16} /> {extToken ? 'Token ready (copied)' : 'Get extension token'}
+              <Puzzle size={16} /> {extensionConnected ? 'Extension connect opened' : 'Connect extension'}
             </Button>
-            {extToken && (
-              <p className="text-caption text-gray-500 break-all font-mono bg-white p-2 rounded border">{extToken}</p>
+            {extensionId && (
+              <p className="text-caption text-success flex items-center gap-1">
+                <Check size={14} /> Extension detected in this browser
+              </p>
             )}
             <Button fullWidth onClick={openApplyWithAutofill} loading={step === 'applying'}>
               Apply with autofill <ExternalLink size={16} />

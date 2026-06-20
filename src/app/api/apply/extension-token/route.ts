@@ -12,7 +12,9 @@ export async function POST() {
   return NextResponse.json({
     token,
     expiresAt: expiresAt.toISOString(),
-    instructions: 'Paste this token in the CareerOS Autofill extension popup. Keep it private.',
+    userEmail: user.email,
+    userName: user.name,
+    instructions: 'Your extension will receive this automatically after you sign in on the connect page.',
   })
 }
 
