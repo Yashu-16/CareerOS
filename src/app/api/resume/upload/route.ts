@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-helpers'
-import { buildResumeKey, uploadResume } from '@/lib/resume-storage'
+import { buildResumeKey, uploadResume, ResumeStorageError } from '@/lib/resume-storage'
 import { parseResumeBuffer } from '@/lib/resume-parser'
 import { syncUserProfileFromResume } from '@/lib/resume-profile'
 import { ApiErrors, auditLog } from '@/lib/errors'
@@ -80,6 +80,9 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     console.error('[RESUME_UPLOAD]', error)
+    if (error instanceof ResumeStorageError) {
+      return ApiErrors.storageUnavailable(error.message)
+    }
     const msg = (error as Error).message
     if (msg === 'S3_UPLOAD_FAILED') {
       return ApiErrors.externalDown()

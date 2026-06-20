@@ -1,10 +1,34 @@
 import fs from 'fs/promises'
+import os from 'os'
 import path from 'path'
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 
 const UPLOAD_ROOT = path.join(process.cwd(), '.uploads')
 
 let s3Client: S3Client | null = null
+
+export class ResumeStorageError extends Error {
+  constructor(
+    message: string,
+    public readonly code: 'S3_NOT_CONFIGURED' | 'S3_DENIED' | 'S3_FAILED' | 'LOCAL_FAILED' = 'S3_FAILED'
+  ) {
+    super(message)
+    this.name = 'ResumeStorageError'
+  }
+}
+
+function isServerless(): boolean {
+  return Boolean(
+    process.env.NETLIFY ||
+    process.env.VERCEL ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME
+  )
+}
+
+function localUploadRoot(): string {
+  if (isServerless()) return path.join(os.tmpdir(), 'careeros-uploads')
+  return UPLOAD_ROOT
+}
 
 /** True when real AWS credentials are set (not empty placeholders). */
 export function isS3Configured(): boolean {
@@ -33,7 +57,7 @@ function getS3Client(): S3Client {
 }
 
 function localPath(key: string): string {
-  return path.join(UPLOAD_ROOT, key)
+  return path.join(localUploadRoot(), key)
 }
 
 export class ResumeFileNotFoundError extends Error {
@@ -69,7 +93,7 @@ export function buildResumeKey(userId: string, filename: string): string {
   return `resumes/${userId}/${Date.now()}_${safeName}`
 }
 
-/** Store a resume file on S3 (production) or local disk (dev / missing AWS creds). */
+/** Store a resume file on S3 (production) or local disk (dev only). */
 export async function uploadResume(
   key: string,
   buffer: Buffer,
@@ -90,17 +114,40 @@ export async function uploadResume(
       console.error('[S3_UPLOAD]', err)
       const name = (err as { name?: string }).name
       if (name === 'AccessDenied' || name === 'InvalidAccessKeyId') {
-        console.warn('[S3_UPLOAD] Falling back to local disk — fix IAM s3:PutObject on the bucket to use S3.')
+        const msg =
+          'Could not upload to S3. The IAM user needs s3:PutObject and s3:GetObject on your bucket. ' +
+          'Check AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and S3_BUCKET_NAME in your deployment env vars.'
+        if (isServerless()) {
+          throw new ResumeStorageError(msg, 'S3_DENIED')
+        }
+        console.warn('[S3_UPLOAD] Falling back to local disk for dev.')
       } else {
-        throw new Error('S3_UPLOAD_FAILED')
+        throw new ResumeStorageError(
+          'Could not upload resume to cloud storage. Please try again shortly.',
+          'S3_FAILED'
+        )
       }
     }
+  } else if (isServerless()) {
+    throw new ResumeStorageError(
+      'Resume upload requires AWS S3 in production. Set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, ' +
+        'AWS_REGION, and S3_BUCKET_NAME in Netlify (or your host) environment variables.',
+      'S3_NOT_CONFIGURED'
+    )
   }
 
-  const filePath = localPath(key)
-  await fs.mkdir(path.dirname(filePath), { recursive: true })
-  await fs.writeFile(filePath, buffer)
-  return 'local'
+  try {
+    const filePath = localPath(key)
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
+    await fs.writeFile(filePath, buffer)
+    return 'local'
+  } catch (err) {
+    console.error('[LOCAL_UPLOAD]', err)
+    throw new ResumeStorageError(
+      'Could not save resume file. On production, configure AWS S3 storage.',
+      'LOCAL_FAILED'
+    )
+  }
 }
 
 /** Read a resume file — checks local disk first, then S3. */
