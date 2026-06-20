@@ -77,7 +77,16 @@ export default function ExtensionConnectPage() {
       }
 
       /** Fallback: content script on CareerOS receives token via postMessage. */
-      window.postMessage({ type: 'CAREEROS_EXTENSION_CONNECT', ...payload }, '*')
+      window.postMessage(
+        {
+          type: 'CAREEROS_EXTENSION_CONNECT',
+          token: payload.token,
+          baseUrl: payload.baseUrl,
+          userEmail: payload.userEmail,
+          userName: payload.userName,
+        },
+        '*'
+      )
       setState('success')
       setTimeout(() => window.close(), 2000)
     } catch (err) {
