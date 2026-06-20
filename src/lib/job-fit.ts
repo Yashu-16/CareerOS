@@ -2,6 +2,7 @@ import type { Job } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { extractSkillsFromText } from '@/lib/resume-skills'
 import { FIT_SCORE_POOL, JOB_FIT_SCORE_SELECT, JOB_LIST_SELECT } from '@/lib/job-list-select'
+import { freshJobWhere } from '@/lib/job-freshness'
 
 /**
  * Profile signals used to score how well a user fits a job. All fields are
@@ -178,7 +179,7 @@ export function computeFitScore(
 export async function getTopMatchedJobs(userId: string, limit = 10) {
   const fitProfile = await loadFitProfile(userId)
   const jobs = await prisma.job.findMany({
-    where: { isActive: true },
+    where: freshJobWhere(),
     select: JOB_FIT_SCORE_SELECT,
     orderBy: { postedAt: 'desc' },
     take: FIT_SCORE_POOL,

@@ -15,13 +15,20 @@ const LEVELS = [
   { value: 'FIVE_PLUS', label: '5+ years' },
 ]
 
+const GENDERS = ['Male', 'Female', 'Non-binary', 'Prefer not to disclose']
+
 interface Profile {
   name: string
   email: string
+  phone: string
+  gender: string
   college: string
   degree: string
   graduationYear: number | null
   city: string
+  state: string
+  country: string
+  pincode: string
   targetRole: string
   targetIndustry: string
   experienceLevel: string
@@ -45,10 +52,15 @@ export default function ProfilePage() {
     setProfile({
       name: (data.name as string) || '',
       email: (data.email as string) || '',
+      phone: (data.phone as string) || '',
+      gender: (data.gender as string) || '',
       college: (data.college as string) || '',
       degree: (data.degree as string) || '',
       graduationYear: (data.graduationYear as number | null) ?? null,
       city: (data.city as string) || '',
+      state: (data.state as string) || '',
+      country: (data.country as string) || 'India',
+      pincode: (data.pincode as string) || '',
       targetRole: (data.targetRole as string) || '',
       targetIndustry: (data.targetIndustry as string) || '',
       experienceLevel: (data.experienceLevel as string) || 'FRESHER',
@@ -135,7 +147,7 @@ export default function ProfilePage() {
         <div>
           <h1 className="text-h1 text-gray-900">Profile & Settings</h1>
           <p className="text-body-md text-gray-500 mt-1">
-            Imported from your resume on upload. Refresh anytime after re-uploading.
+            Used by the CareerOS extension to autofill job applications. Keep phone, gender, and address up to date.
           </p>
         </div>
         <Button variant="secondary" onClick={() => syncFromResume()} loading={syncing}>
@@ -149,6 +161,22 @@ export default function ProfilePage() {
           <Input label="Full name" value={profile.name} onChange={(e) => update('name', e.target.value)} />
           <Input label="Email" value={profile.email} disabled />
           <div className="grid sm:grid-cols-2 gap-4">
+            <Input label="Phone" value={profile.phone} onChange={(e) => update('phone', e.target.value)} placeholder="+91 98765 43210" />
+            <div>
+              <label className="block text-label text-gray-700 mb-1.5">Gender</label>
+              <select
+                value={profile.gender}
+                onChange={(e) => update('gender', e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-600"
+              >
+                <option value="">Select gender</option>
+                {GENDERS.map((g) => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
             <Input label="College" value={profile.college} onChange={(e) => update('college', e.target.value)} />
             <Input label="Degree" value={profile.degree} onChange={(e) => update('degree', e.target.value)} />
           </div>
@@ -160,6 +188,11 @@ export default function ProfilePage() {
               onChange={(e) => update('graduationYear', e.target.value ? Number(e.target.value) : null)}
             />
             <Input label="City" value={profile.city} onChange={(e) => update('city', e.target.value)} />
+          </div>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Input label="State" value={profile.state} onChange={(e) => update('state', e.target.value)} />
+            <Input label="Country" value={profile.country} onChange={(e) => update('country', e.target.value)} />
+            <Input label="PIN code" value={profile.pincode} onChange={(e) => update('pincode', e.target.value)} />
           </div>
           <div>
             <label className="block text-label text-gray-700 mb-1.5">Bio</label>

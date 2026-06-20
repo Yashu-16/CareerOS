@@ -1,9 +1,15 @@
 import { redirect } from 'next/navigation'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 import { getCurrentUser } from '@/lib/auth-helpers'
 
 export default async function OnboardingLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser()
-  if (!user) redirect('/login')
+  if (!user) {
+    const session = await getServerSession(authOptions)
+    if (session) redirect('/api/auth/signout?callbackUrl=/login')
+    redirect('/login')
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">

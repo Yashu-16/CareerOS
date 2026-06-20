@@ -9,6 +9,8 @@ import { EventFilters } from '@/components/events/EventFilters'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Button } from '@/components/ui/Button'
 import { useCachedFetch } from '@/hooks/useCachedFetch'
+import { formatCatalogUpdatedAt } from '@/lib/format'
+import { formatDailySyncLabel } from '@/lib/sync-schedule'
 import type { CareerEventRow } from '@/types'
 
 interface EventsApiResponse {
@@ -17,6 +19,7 @@ interface EventsApiResponse {
   typeFacets?: Record<string, number>
   sourceFacets?: Record<string, number>
   total?: number
+  catalogUpdatedAt?: string
 }
 
 function EventsInner() {
@@ -33,7 +36,9 @@ function EventsInner() {
   }, [searchParams])
 
   const url = `/api/events${query ? `?${query}` : ''}`
-  const { data, loading, reload } = useCachedFetch<EventsApiResponse>(`events:${query}`, url)
+  const { data, loading, reload } = useCachedFetch<EventsApiResponse>(`events:${query}`, url, {
+    maxAgeMs: 30_000,
+  })
 
   const events = data?.events || []
   const city = data?.city ?? null
@@ -57,7 +62,13 @@ function EventsInner() {
         <div>
           <h1 className="text-h1 text-gray-900">Career Events</h1>
           <p className="text-body-md text-gray-500 mt-1">
-            Upcoming hackathons, networking, career fairs, and workshops from Unstop, Devfolio, Luma, and more.
+            Live hackathons, workshops, and career events in the next 3 days — from Unstop, Devfolio, Luma, and more.
+          </p>
+          <p className="text-caption text-gray-500 mt-1">
+            {formatDailySyncLabel()}
+            {data?.catalogUpdatedAt && (
+              <> · {formatCatalogUpdatedAt(data.catalogUpdatedAt)}</>
+            )}
           </p>
           <p className="text-body-sm text-gray-500 mt-2 flex items-center gap-1.5">
             <MapPin size={14} className="text-primary-600" />

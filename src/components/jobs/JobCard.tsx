@@ -3,7 +3,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { MapPin, Building2, Bookmark } from 'lucide-react'
 import { JobTypeBadge, LocationBadge, MatchBadge, SkillTag } from '@/components/ui/Badge'
-import { formatSalary, timeAgo } from '@/lib/format'
+import { formatSalary, formatJobPostedAt } from '@/lib/format'
 import type { JobWithMatch } from '@/types'
 
 const COMPANY_SOURCES = ['greenhouse', 'lever', 'ashby', 'smartrecruiters']
@@ -105,7 +105,9 @@ export function JobCard({
         </div>
       )}
 
-      <p className="text-caption text-gray-500 mt-3">Posted {timeAgo(job.postedAt)}</p>
+      <p className="text-caption text-gray-500 mt-3" title={formatJobPostedAt(job.postedAt, job.scrapedAt)}>
+        {formatJobPostedAt(job.postedAt, job.scrapedAt)}
+      </p>
     </motion.div>
   )
 }

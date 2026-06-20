@@ -10,7 +10,7 @@ type Status = 'idle' | 'uploading' | 'processing' | 'done' | 'error'
 export default function ResumeUpload({
   onUploadComplete,
 }: {
-  onUploadComplete: (resumeId: string, filename: string) => void
+  onUploadComplete: (resumeId: string, filename: string, storage?: 's3' | 'local') => void
 }) {
   const [status, setStatus] = useState<Status>('idle')
   const [progress, setProgress] = useState(0)
@@ -44,7 +44,7 @@ export default function ResumeUpload({
           const formData = new FormData()
           formData.append('file', file)
 
-          const result = await new Promise<{ resumeId: string; profileSynced?: string[] }>((resolve, reject) => {
+          const result = await new Promise<{ resumeId: string; storage?: 's3' | 'local' }>((resolve, reject) => {
             const xhr = new XMLHttpRequest()
             xhr.upload.onprogress = (e) => {
               if (e.lengthComputable) {
@@ -77,7 +77,7 @@ export default function ResumeUpload({
         })
 
         setStatus('done')
-        onUploadComplete(result.resumeId, file.name)
+        onUploadComplete(result.resumeId, file.name, result.storage)
       } catch (err) {
         setStatus('error')
         setError(err instanceof Error ? err.message : 'Upload failed. Please try again.')

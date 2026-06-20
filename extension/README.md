@@ -19,6 +19,20 @@ No tokens to copy or paste.
 4. On the application page, click **Autofill** in the extension popup (or the floating button)
 5. Extension fills fields and attaches the tailored DOCX for **this posting**
 
+## What gets filled
+
+The extension scans **every visible field** on the application page (inputs, textareas, selects, radios, checkboxes) and matches them to your CareerOS profile:
+
+- **Personal:** name, email, phone, gender, city, state, country, PIN code
+- **Education:** college, degree, graduation year, education history (from resume)
+- **Career:** skills, target role, industry, years of experience, work history (from resume)
+- **Links:** LinkedIn, GitHub, portfolio
+- **Common questions:** work authorization, visa sponsorship, relocation, notice period, cover letter
+- **Consent checkboxes:** terms / privacy agreements (auto-checked — review before submit)
+- **Resume:** tailored DOCX attached to resume/CV file inputs
+
+Complete your **Profile** page (including phone and gender) for best results. Use **Import from resume** to pull education and experience from your upload.
+
 ## Supported platforms
 
 - Greenhouse (`boards.greenhouse.io`, `job-boards.greenhouse.io`)

@@ -1,4 +1,5 @@
 import type { JobType, LocationType } from '@prisma/client'
+import { isJobPostedTooOld } from '@/lib/job-freshness'
 
 const BASE_URL = 'https://jsearch.p.rapidapi.com'
 
@@ -53,17 +54,27 @@ export async function searchJobs(params: SearchJobsParams): Promise<any[]> {
   url.searchParams.set('country', 'in')
   url.searchParams.set('language', 'en')
 
-  const response = await fetch(url.toString(), {
-    headers: {
-      'X-RapidAPI-Key': process.env.JSEARCH_API_KEY!,
-      'X-RapidAPI-Host': process.env.JSEARCH_API_HOST || 'jsearch.p.rapidapi.com',
-    },
-    next: { revalidate: 3600 },
-  })
+  let lastError: Error | null = null
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 1500 * attempt))
 
-  if (!response.ok) throw new Error(`JSearch API error: ${response.status}`)
-  const data = await response.json()
-  return data.data || []
+    const response = await fetch(url.toString(), {
+      headers: {
+        'X-RapidAPI-Key': process.env.JSEARCH_API_KEY!,
+        'X-RapidAPI-Host': process.env.JSEARCH_API_HOST || 'jsearch.p.rapidapi.com',
+      },
+      cache: 'no-store',
+    })
+
+    if (response.status === 429) {
+      lastError = new Error(`JSearch API error: 429`)
+      continue
+    }
+    if (!response.ok) throw new Error(`JSearch API error: ${response.status}`)
+    const data = await response.json()
+    return data.data || []
+  }
+  throw lastError || new Error('JSearch API error: 429')
 }
 
 /**
@@ -108,7 +119,9 @@ function refineJobType(base: JobType, title?: string): JobType {
   return base
 }
 
-export function normalizeJob(raw: any): NormalizedJob {
+export function normalizeJob(raw: any): NormalizedJob | null {
+  if (!raw?.job_id) return null
+
   const location = `${raw.job_city || ''}, ${raw.job_state || ''}, India`
     .replace(/^, /, '')
     .replace(/, ,/g, ',')
@@ -119,6 +132,12 @@ export function normalizeJob(raw: any): NormalizedJob {
   if (publisher.includes('linkedin')) source = 'linkedin'
   else if (publisher.includes('naukri')) source = 'naukri'
   else if (publisher.includes('internshala')) source = 'internshala'
+  else if (publisher.includes('ziprecruiter')) source = 'ziprecruiter'
+
+  const postedAt = raw.job_posted_at_timestamp
+    ? new Date(raw.job_posted_at_timestamp * 1000)
+    : null
+  if (!postedAt || isJobPostedTooOld(postedAt)) return null
 
   return {
     externalId: raw.job_id,
@@ -136,8 +155,6 @@ export function normalizeJob(raw: any): NormalizedJob {
     skills: raw.job_required_skills || [],
     applyUrl: raw.job_apply_link || '#',
     source,
-    postedAt: raw.job_posted_at_timestamp
-      ? new Date(raw.job_posted_at_timestamp * 1000)
-      : new Date(),
+    postedAt,
   }
 }

@@ -6,8 +6,8 @@ export default withAuth(
     const token = req.nextauth.token
     const { pathname } = req.nextUrl
 
-    // Redirect logged-in users away from auth pages.
-    if (token && (pathname.startsWith('/login') || pathname.startsWith('/signup'))) {
+    // Redirect logged-in users away from auth pages (requires a valid user id in JWT).
+    if (token?.id && (pathname.startsWith('/login') || pathname.startsWith('/signup'))) {
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
 
@@ -36,7 +36,7 @@ export default withAuth(
         }
         // Public landing + auth API are open; everything else requires a token.
         if (pathname === '/') return true
-        return !!token
+        return !!token?.id
       },
     },
   }

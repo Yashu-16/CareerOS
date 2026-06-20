@@ -2,15 +2,14 @@ import type { NormalizedJob } from '@/lib/jobs-api'
 import { clamp, inferJobType, inferLocationType, isLikelyIndia, stripHtml } from './utils'
 
 const BASE_URL = 'https://api.lever.co/v0/postings'
+const FETCH_OPTS = { cache: 'no-store' as const }
 
 /**
  * Fetch live postings directly from a company's public Lever job board.
  * Throws on network/HTTP failure so the caller can decide how to handle it.
  */
 export async function fetchLeverJobs(slug: string, companyName: string): Promise<NormalizedJob[]> {
-  const res = await fetch(`${BASE_URL}/${slug}?mode=json`, {
-    next: { revalidate: 3600 },
-  })
+  const res = await fetch(`${BASE_URL}/${slug}?mode=json`, FETCH_OPTS)
   if (!res.ok) throw new Error(`Lever "${slug}" returned ${res.status}`)
 
   const rawJobs: any[] = await res.json()
@@ -32,6 +31,8 @@ export async function fetchLeverJobs(slug: string, companyName: string): Promise
         )
       : null
 
+    const postedAt = j?.createdAt ? new Date(j.createdAt) : new Date()
+
     jobs.push({
       externalId: `lever:${slug}:${j.id}`,
       title: j?.text || 'Untitled role',
@@ -48,7 +49,7 @@ export async function fetchLeverJobs(slug: string, companyName: string): Promise
       skills: [],
       applyUrl: j?.hostedUrl || j?.applyUrl || '#',
       source: 'lever',
-      postedAt: j?.createdAt ? new Date(j.createdAt) : new Date(),
+      postedAt,
     })
   }
   return jobs

@@ -1,13 +1,18 @@
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { getCurrentUser } from '@/lib/auth-helpers'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { MobileNav } from '@/components/layout/MobileNav'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) redirect('/login')
+  const user = await getCurrentUser()
+  if (!user) {
+    const session = await getServerSession(authOptions)
+    if (session) redirect('/api/auth/signout?callbackUrl=/login')
+    redirect('/login')
+  }
 
   return (
     <div className="flex min-h-screen bg-gray-50">

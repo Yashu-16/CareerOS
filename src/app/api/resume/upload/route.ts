@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer())
     const key = buildResumeKey(user.id, file.name)
-    await uploadResume(key, buffer, file.type)
+    const storage = await uploadResume(key, buffer, file.type)
 
     await prisma.resume.updateMany({
       where: { userId: user.id, isActive: true },
@@ -76,9 +76,14 @@ export async function POST(req: NextRequest) {
       filename: file.name,
       profileSynced,
       parsed: Boolean(parsedText),
+      storage,
     })
   } catch (error) {
     console.error('[RESUME_UPLOAD]', error)
+    const msg = (error as Error).message
+    if (msg === 'S3_UPLOAD_FAILED') {
+      return ApiErrors.externalDown()
+    }
     const code = (error as { code?: string })?.code
     if (code === 'P2003' || code === 'P2025') {
       return ApiErrors.unauthorized()

@@ -2,6 +2,7 @@ import type { NormalizedJob } from '@/lib/jobs-api'
 import { clamp, inferJobType, inferLocationType, isLikelyIndia, stripHtml } from './utils'
 
 const BASE_URL = 'https://boards-api.greenhouse.io/v1/boards'
+const FETCH_OPTS = { cache: 'no-store' as const }
 
 /**
  * Fetch live postings directly from a company's public Greenhouse job board.
@@ -9,9 +10,7 @@ const BASE_URL = 'https://boards-api.greenhouse.io/v1/boards'
  * Throws on network/HTTP failure so the caller can decide how to handle it.
  */
 export async function fetchGreenhouseJobs(slug: string, companyName: string): Promise<NormalizedJob[]> {
-  const res = await fetch(`${BASE_URL}/${slug}/jobs?content=true`, {
-    next: { revalidate: 3600 },
-  })
+  const res = await fetch(`${BASE_URL}/${slug}/jobs?content=true`, FETCH_OPTS)
   if (!res.ok) throw new Error(`Greenhouse "${slug}" returned ${res.status}`)
 
   const data = await res.json()
@@ -23,10 +22,10 @@ export async function fetchGreenhouseJobs(slug: string, companyName: string): Pr
     if (!isLikelyIndia(location)) continue
 
     const description = clamp(stripHtml(j?.content || ''))
-    const postedAt = j?.updated_at
-      ? new Date(j.updated_at)
-      : j?.first_published
-        ? new Date(j.first_published)
+    const postedAt = j?.first_published
+      ? new Date(j.first_published)
+      : j?.updated_at
+        ? new Date(j.updated_at)
         : new Date()
 
     jobs.push({

@@ -2,15 +2,14 @@ import type { NormalizedJob } from '@/lib/jobs-api'
 import { clamp, inferJobType, inferLocationType, isLikelyIndia, stripHtml } from './utils'
 
 const BASE_URL = 'https://api.ashbyhq.com/posting-api/job-board'
+const FETCH_OPTS = { cache: 'no-store' as const }
 
 /**
  * Fetch live postings directly from a company's public Ashby job board.
  * Throws on network/HTTP failure so the caller can decide how to handle it.
  */
 export async function fetchAshbyJobs(slug: string, companyName: string): Promise<NormalizedJob[]> {
-  const res = await fetch(`${BASE_URL}/${slug}?includeCompensation=true`, {
-    next: { revalidate: 3600 },
-  })
+  const res = await fetch(`${BASE_URL}/${slug}?includeCompensation=true`, FETCH_OPTS)
   if (!res.ok) throw new Error(`Ashby "${slug}" returned ${res.status}`)
 
   const data = await res.json()
@@ -25,6 +24,7 @@ export async function fetchAshbyJobs(slug: string, companyName: string): Promise
     if (!isLikelyIndia(location) && !isLikelyIndia(country)) continue
 
     const description = clamp(j?.descriptionPlain || stripHtml(j?.descriptionHtml || ''))
+    const postedAt = j?.publishedAt ? new Date(j.publishedAt) : new Date()
 
     jobs.push({
       externalId: `ashby:${slug}:${j.id}`,
@@ -42,7 +42,7 @@ export async function fetchAshbyJobs(slug: string, companyName: string): Promise
       skills: [],
       applyUrl: j?.jobUrl || j?.applyUrl || '#',
       source: 'ashby',
-      postedAt: j?.publishedAt ? new Date(j.publishedAt) : new Date(),
+      postedAt,
     })
   }
   return jobs

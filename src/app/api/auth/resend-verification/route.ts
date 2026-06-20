@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { randomBytes } from 'crypto'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { redis } from '@/lib/redis'
+import { storeAuthToken, logDevAuthLink } from '@/lib/auth-tokens'
 import { sendVerificationEmail } from '@/lib/sendgrid'
 import { ApiErrors } from '@/lib/errors'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
@@ -24,9 +23,9 @@ export async function POST(req: NextRequest) {
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user || user.emailVerified) return NextResponse.json(GENERIC)
 
-    const token = randomBytes(32).toString('hex')
-    await redis.set(`email-verify:${token}`, user.id, { ex: 86400 })
+    const token = await storeAuthToken('email-verify', user.id, 86400)
     const url = `${process.env.NEXT_PUBLIC_APP_URL}/verify-email?token=${token}`
+    logDevAuthLink('Email verification link', url)
     await sendVerificationEmail(user.email, user.name, url)
 
     return NextResponse.json(GENERIC)

@@ -2,8 +2,9 @@ import type { NormalizedJob } from '@/lib/jobs-api'
 import { clamp, inferJobType, isLikelyIndia, mapPool, stripHtml } from './utils'
 
 const BASE_URL = 'https://api.smartrecruiters.com/v1/companies'
+const FETCH_OPTS = { cache: 'no-store' as const }
 // Bound the per-company detail fetches so a huge board can't explode request count.
-const MAX_PER_COMPANY = 60
+const MAX_PER_COMPANY = 100
 
 interface SrPosting {
   id: string
@@ -30,7 +31,7 @@ function postingLocation(p: SrPosting): string {
 
 async function fetchPostingDetail(slug: string, id: string): Promise<any | null> {
   try {
-    const res = await fetch(`${BASE_URL}/${slug}/postings/${id}`, { next: { revalidate: 3600 } })
+    const res = await fetch(`${BASE_URL}/${slug}/postings/${id}`, FETCH_OPTS)
     if (!res.ok) return null
     return await res.json()
   } catch {
@@ -44,7 +45,7 @@ async function fetchPostingDetail(slug: string, id: string): Promise<any | null>
  * with bounded concurrency. Throws on the initial list failure.
  */
 export async function fetchSmartRecruitersJobs(slug: string, companyName: string): Promise<NormalizedJob[]> {
-  const res = await fetch(`${BASE_URL}/${slug}/postings?limit=100`, { next: { revalidate: 3600 } })
+  const res = await fetch(`${BASE_URL}/${slug}/postings?limit=100`, FETCH_OPTS)
   if (!res.ok) throw new Error(`SmartRecruiters "${slug}" returned ${res.status}`)
 
   const data = await res.json()
@@ -71,6 +72,8 @@ export async function fetchSmartRecruitersJobs(slug: string, companyName: string
 
     const locationType = p.location?.remote ? 'REMOTE' : p.location?.hybrid ? 'HYBRID' : 'ONSITE'
 
+    const postedAt = p.releasedDate ? new Date(p.releasedDate) : new Date()
+
     return {
       externalId: `smartrecruiters:${slug}:${p.id}`,
       title: p.name || 'Untitled role',
@@ -87,7 +90,7 @@ export async function fetchSmartRecruitersJobs(slug: string, companyName: string
       skills: [],
       applyUrl: `https://jobs.smartrecruiters.com/${slug}/${p.id}`,
       source: 'smartrecruiters',
-      postedAt: p.releasedDate ? new Date(p.releasedDate) : new Date(),
+      postedAt,
     }
   })
 }

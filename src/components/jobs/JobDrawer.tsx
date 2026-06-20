@@ -6,7 +6,7 @@ import { Drawer } from '@/components/ui/Drawer'
 import { Button } from '@/components/ui/Button'
 import { JobTypeBadge, LocationBadge, MatchBadge, SkillTag } from '@/components/ui/Badge'
 import { SmartApplyPanel } from '@/components/jobs/SmartApplyPanel'
-import { formatSalary, timeAgo } from '@/lib/format'
+import { formatSalary, formatJobPostedAt } from '@/lib/format'
 import { useToast } from '@/components/ui/Toast'
 import type { JobWithMatch } from '@/types'
 
@@ -153,7 +153,7 @@ export function JobDrawer({
         </div>
 
         <p className="text-caption text-gray-500 mt-6">
-          Posted {timeAgo(view.postedAt)} · via {view.source}
+          {formatJobPostedAt(view.postedAt, view.scrapedAt)} · via {view.source}
         </p>
       </div>
     </Drawer>

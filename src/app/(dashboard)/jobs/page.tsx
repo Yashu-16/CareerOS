@@ -9,6 +9,8 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { Button } from '@/components/ui/Button'
 import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
 import { useCachedFetch } from '@/hooks/useCachedFetch'
+import { formatCatalogUpdatedAt } from '@/lib/format'
+import { formatDailySyncLabel } from '@/lib/sync-schedule'
 import type { JobWithMatch } from '@/types'
 
 interface JobsApiResponse {
@@ -17,6 +19,8 @@ interface JobsApiResponse {
   hasMore?: boolean
   typeFacets?: Record<string, number>
   sourceFacets?: Record<string, number>
+  catalogUpdatedAt?: string
+  nextScheduledSyncIst?: string
   warning?: string
 }
 
@@ -109,7 +113,7 @@ function JobsInner() {
       setPage(1)
       await reload(false)
     } catch {
-      setWarning('Background sync is rate-limited. Jobs refresh automatically every few hours.')
+      setWarning('Background sync is rate-limited. The catalog refreshes automatically every day at 12:00 PM IST.')
     } finally {
       setSyncing(false)
     }
@@ -131,8 +135,14 @@ function JobsInner() {
           <h1 className="text-h1 text-gray-900">Job Discovery</h1>
           <p className="text-body-md text-gray-500 mt-1">
             {total !== null
-              ? `${total.toLocaleString('en-IN')} roles from our database (updated on a schedule from company career pages & job boards).`
-              : 'Jobs are loaded from our database — refreshed automatically in the background.'}
+              ? `${total.toLocaleString('en-IN')} live roles from company career pages and job boards.`
+              : 'Jobs are loaded from our database and refreshed daily.'}
+          </p>
+          <p className="text-caption text-gray-500 mt-1">
+            {formatDailySyncLabel()}
+            {data?.catalogUpdatedAt && (
+              <> · {formatCatalogUpdatedAt(data.catalogUpdatedAt)}</>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-helpers'
 import { getTopMatchedJobs } from '@/lib/job-fit'
 import { JOB_LIST_SELECT } from '@/lib/job-list-select'
+import { freshJobWhere } from '@/lib/job-freshness'
 import { ApiErrors } from '@/lib/errors'
 
 /**
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
       const jobIds = matches.map((m) => m.id)
       if (jobIds.length) {
         const jobs = await prisma.job.findMany({
-          where: { id: { in: jobIds }, isActive: true },
+          where: { AND: [{ id: { in: jobIds } }, freshJobWhere()] },
           select: JOB_LIST_SELECT,
         })
         const scored = jobs

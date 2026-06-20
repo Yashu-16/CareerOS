@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import { randomBytes } from 'crypto'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { redis } from '@/lib/redis'
 import { sendVerificationEmail } from '@/lib/sendgrid'
+import { storeAuthToken, logDevAuthLink } from '@/lib/auth-tokens'
 import { ApiErrors, auditLog } from '@/lib/errors'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 
@@ -40,10 +39,10 @@ export async function POST(req: NextRequest) {
       data: { email, password: hashedPassword, name },
     })
 
-    const token = randomBytes(32).toString('hex')
-    await redis.set(`email-verify:${token}`, user.id, { ex: 86400 })
+    const token = await storeAuthToken('email-verify', user.id, 86400)
 
     const verificationUrl = `${process.env.NEXT_PUBLIC_APP_URL}/verify-email?token=${token}`
+    logDevAuthLink('Email verification link', verificationUrl)
     await sendVerificationEmail(email, name, verificationUrl)
 
     await auditLog({ userId: user.id, action: 'REGISTER', resource: 'user', ip })

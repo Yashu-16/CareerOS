@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-helpers'
 import { matchesUserCity, EVENT_TYPE_LABELS, EVENT_SOURCE_LABELS, isUpcomingEvent } from '@/lib/events'
 import type { EventSource } from '@/lib/events'
+import { isInEventDisplayWindow, eventDisplayWindow } from '@/lib/event-window'
 import { ApiErrors } from '@/lib/errors'
 
 const VALID_TYPES: EventType[] = ['HACKATHON', 'NETWORKING', 'CAREER_SOCIAL', 'CAREER_FAIR', 'WORKSHOP']
@@ -41,9 +42,11 @@ export async function GET(req: NextRequest) {
   try {
     const userCity = user.city?.trim() || null
     const now = new Date()
+    const { windowStart, windowEnd } = eventDisplayWindow(now)
 
     const where: Prisma.CareerEventWhereInput = {
       isActive: true,
+      startsAt: { gte: windowStart, lte: windowEnd },
       OR: [{ endsAt: { gte: now } }, { endsAt: null, startsAt: { gte: now } }],
     }
     if (type) where.type = type
@@ -57,7 +60,7 @@ export async function GET(req: NextRequest) {
     })
 
     const locationMatched = events.filter(
-      (e) => isUpcomingEvent(e) && matchesUserCity(userCity, e)
+      (e) => isUpcomingEvent(e) && isInEventDisplayWindow(e) && matchesUserCity(userCity, e)
     )
 
     const typeFacets = locationMatched.reduce<Record<string, number>>((acc, e) => {
@@ -79,8 +82,16 @@ export async function GET(req: NextRequest) {
         typeLabels: EVENT_TYPE_LABELS,
         sourceLabels: EVENT_SOURCE_LABELS,
         total: locationMatched.length,
+        windowDays: 3,
+        catalogUpdatedAt: (
+          await prisma.careerEvent.aggregate({
+            where: { isActive: true },
+            _max: { scrapedAt: true },
+          })
+        )._max.scrapedAt?.toISOString(),
+        nextScheduledSyncIst: '12:00 PM IST daily',
       },
-      { headers: { 'Cache-Control': 'private, max-age=30, stale-while-revalidate=60' } }
+      { headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=20' } }
     )
   } catch (error) {
     console.error('[EVENTS]', error)

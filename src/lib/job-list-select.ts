@@ -17,6 +17,7 @@ export const JOB_LIST_SELECT = {
   applyUrl: true,
   source: true,
   postedAt: true,
+  scrapedAt: true,
   isActive: true,
 } satisfies Prisma.JobSelect
 

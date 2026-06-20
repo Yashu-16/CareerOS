@@ -6,32 +6,17 @@ import { ApiErrors } from '@/lib/errors'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { computeFitScore, buildFitProfile } from '@/lib/job-fit'
 import { FIT_SCORE_POOL, JOB_FIT_SCORE_SELECT, JOB_LIST_SELECT, type JobListRow } from '@/lib/job-list-select'
+import { DEFAULT_JOB_DATE_FILTER, freshJobWhere } from '@/lib/job-freshness'
 
 const VALID_TYPES: JobType[] = ['FULLTIME', 'PARTTIME', 'INTERNSHIP', 'CONTRACT', 'FREELANCE']
 const PAGE_SIZE = 20
 
-const COMPANY_SOURCES = ['greenhouse', 'lever', 'ashby', 'smartrecruiters']
+const COMPANY_SOURCES = ['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workday']
 
 function sourceClause(key: string): Prisma.StringFilter | string | undefined {
   if (!key) return undefined
   if (key === 'company') return { in: COMPANY_SOURCES }
   return key
-}
-
-function dateSince(key: string): Date | null {
-  const day = 24 * 60 * 60 * 1000
-  switch (key) {
-    case 'today':
-      return new Date(Date.now() - day)
-    case '3days':
-      return new Date(Date.now() - 3 * day)
-    case 'week':
-      return new Date(Date.now() - 7 * day)
-    case 'month':
-      return new Date(Date.now() - 30 * day)
-    default:
-      return null
-  }
 }
 
 function scoreJobs(jobs: JobListRow[], fitProfile: ReturnType<typeof buildFitProfile>, hasResume: boolean) {
@@ -60,16 +45,15 @@ export async function GET(req: NextRequest) {
   const location = (searchParams.get('location') || '').trim()
   const jobTypeParam = (searchParams.get('jobType') || '').toUpperCase()
   const jobType = VALID_TYPES.includes(jobTypeParam as JobType) ? (jobTypeParam as JobType) : undefined
-  const datePosted = searchParams.get('datePosted') || ''
+  const datePosted = searchParams.get('datePosted') || DEFAULT_JOB_DATE_FILTER
   const sourceParam = (searchParams.get('source') || '').toLowerCase()
   const page = Math.min(50, Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1))
   const includeFacets = searchParams.get('facets') !== '0' && page === 1
 
-  const baseWhere: Prisma.JobWhereInput = { isActive: true }
+  const baseWhere: Prisma.JobWhereInput = {
+    ...freshJobWhere(datePosted),
+  }
   if (location) baseWhere.location = { contains: location, mode: 'insensitive' }
-
-  const since = dateSince(datePosted)
-  if (since) baseWhere.postedAt = { gte: since }
 
   if (q) {
     const terms = q.split(/\s+/).filter((t) => t.length > 1)
@@ -190,10 +174,17 @@ export async function GET(req: NextRequest) {
         hasMore: total ? page * PAGE_SIZE < total : jobs.length === PAGE_SIZE,
         typeFacets,
         sourceFacets,
+        catalogUpdatedAt: (
+          await prisma.job.aggregate({
+            where: { isActive: true },
+            _max: { scrapedAt: true },
+          })
+        )._max.scrapedAt?.toISOString(),
+        nextScheduledSyncIst: '12:00 PM IST daily',
       },
       {
         headers: {
-          'Cache-Control': 'private, max-age=15, stale-while-revalidate=30',
+          'Cache-Control': 'private, max-age=10, stale-while-revalidate=20',
         },
       }
     )

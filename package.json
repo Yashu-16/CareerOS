@@ -13,6 +13,12 @@
     "prisma:push": "dotenv -e .env.local -- prisma db push",
     "prisma:migrate": "dotenv -e .env.local -- prisma migrate dev",
     "prisma:studio": "dotenv -e .env.local -- prisma studio",
+    "db:check": "node scripts/check-database.mjs",
+    "db:seed-jobs": "dotenv -e .env.local -- node scripts/seed-jobs.mjs",
+    "db:bootstrap": "dotenv -e .env.local -- node scripts/bootstrap-db.mjs",
+    "sync:jobs": "dotenv -e .env.local -- npx tsx scripts/sync-jobs.ts",
+    "sync:events": "dotenv -e .env.local -- npx tsx scripts/sync-events.ts",
+    "sync:all": "dotenv -e .env.local -- npx tsx scripts/sync-all.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

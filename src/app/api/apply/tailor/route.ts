@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-helpers'
 import { tailorResumeForJob, isDocxResume } from '@/lib/resume-tailor'
+import { ResumeFileNotFoundError, resumeFileExists } from '@/lib/resume-storage'
 import { ApiErrors, errorResponse } from '@/lib/errors'
 import { rateLimit } from '@/lib/rate-limit'
 
@@ -55,6 +56,13 @@ export async function POST(req: NextRequest) {
         503
       )
     }
+    if (error instanceof ResumeFileNotFoundError || msg === 'RESUME_FILE_NOT_FOUND') {
+      return errorResponse(
+        'RESUME_FILE_NOT_FOUND',
+        'Your resume file is missing from storage. Please re-upload your DOCX on the Resume page, then try again.',
+        400
+      )
+    }
     console.error('[APPLY_TAILOR]', error)
     return ApiErrors.aiUnavailable()
   }
@@ -75,12 +83,16 @@ export async function GET(req: NextRequest) {
       }),
       prisma.resume.findFirst({
         where: { userId: user.id, isActive: true },
-        select: { filename: true, mimeType: true },
+        select: { filename: true, mimeType: true, s3Key: true },
       }),
     ])
 
     const resumeInfo = resume
-      ? { filename: resume.filename, isDocx: isDocxResume(resume) }
+      ? {
+          filename: resume.filename,
+          isDocx: isDocxResume(resume),
+          fileMissing: !(await resumeFileExists(resume.s3Key)),
+        }
       : null
 
     if (!tailored) {

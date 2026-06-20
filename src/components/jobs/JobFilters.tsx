@@ -12,22 +12,27 @@ const JOB_TYPES = [
 ]
 
 const DATE_POSTED = [
-  { value: '', label: 'Any time' },
-  { value: 'today', label: 'Today' },
+  { value: '', label: 'All live listings' },
+  { value: 'today', label: 'Posted today' },
   { value: '3days', label: 'Last 3 days' },
   { value: 'week', label: 'Past week' },
   { value: 'month', label: 'Past month' },
 ]
 
-// Each source option maps to one or more raw `source` values in the DB so we can
-// surface the count and group all direct ATS boards under one tidy option.
 const SOURCES: { value: string; label: string; match: string[] }[] = [
   { value: '', label: 'All sources', match: [] },
-  { value: 'company', label: 'Company career pages', match: ['greenhouse', 'lever', 'ashby', 'smartrecruiters'] },
+  {
+    value: 'company',
+    label: 'Company career pages',
+    match: ['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workday'],
+  },
   { value: 'linkedin', label: 'LinkedIn', match: ['linkedin'] },
   { value: 'indeed', label: 'Indeed', match: ['indeed'] },
   { value: 'naukri', label: 'Naukri', match: ['naukri'] },
   { value: 'internshala', label: 'Internshala', match: ['internshala'] },
+  { value: 'adzuna', label: 'Adzuna', match: ['adzuna'] },
+  { value: 'ziprecruiter', label: 'ZipRecruiter', match: ['ziprecruiter'] },
+  { value: 'remotive', label: 'Remote (Remotive)', match: ['remotive'] },
 ]
 
 interface JobFiltersProps {

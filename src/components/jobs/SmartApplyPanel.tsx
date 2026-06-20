@@ -32,6 +32,7 @@ type Step = 'idle' | 'tailoring' | 'ready' | 'applying'
 interface ResumeInfo {
   filename: string
   isDocx: boolean
+  fileMissing?: boolean
 }
 
 export function SmartApplyPanel({ job }: { job: JobWithMatch }) {
@@ -43,7 +44,7 @@ export function SmartApplyPanel({ job }: { job: JobWithMatch }) {
   const [extensionId, setExtensionId] = useState<string | null>(null)
   const [extensionConnected, setExtensionConnected] = useState(false)
 
-  const canTailor = resumeInfo?.isDocx === true
+  const canTailor = resumeInfo?.isDocx === true && !resumeInfo?.fileMissing
 
   const loadExisting = useCallback(async () => {
     const res = await fetch(`/api/apply/tailor?jobId=${encodeURIComponent(job.id)}`)
@@ -94,8 +95,7 @@ export function SmartApplyPanel({ job }: { job: JobWithMatch }) {
       })
       const data = await res.json()
       if (!res.ok) {
-        const detail = Array.isArray(data.details) ? data.details[0]?.message : null
-        throw new Error(detail || data.message || 'Tailoring failed')
+        throw new Error(data.message || data.code || 'Tailoring failed')
       }
       setTailored({
         id: data.tailoredResumeId,
@@ -213,6 +213,21 @@ export function SmartApplyPanel({ job }: { job: JobWithMatch }) {
         </div>
       </div>
 
+      {step === 'idle' && resumeInfo?.fileMissing && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2">
+          <p className="text-body-sm text-red-900">
+            Your resume <span className="font-medium">{resumeInfo.filename}</span> is registered but the file is
+            missing from storage (common after a server reset). Please upload it again.
+          </p>
+          <Link
+            href="/resume"
+            className="inline-flex text-body-sm font-medium text-primary-700 hover:text-primary-800"
+          >
+            Re-upload DOCX resume →
+          </Link>
+        </div>
+      )}
+
       {step === 'idle' && canTailor && (
         <>
           <p className="text-caption font-medium text-gray-700 uppercase tracking-wide">Step 1 · Tailor resume</p>
@@ -222,7 +237,7 @@ export function SmartApplyPanel({ job }: { job: JobWithMatch }) {
         </>
       )}
 
-      {step === 'idle' && resumeInfo && !canTailor && (
+      {step === 'idle' && resumeInfo && !canTailor && !resumeInfo.fileMissing && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
           <p className="text-body-sm text-amber-900">
             Smart Apply needs a <strong>DOCX</strong> resume to keep your formatting. Your current file is{' '}
