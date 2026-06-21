@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { redis } from '@/lib/redis'
+import { consumeAuthToken } from '@/lib/auth-tokens'
 import { ApiErrors, auditLog } from '@/lib/errors'
 
 const schema = z.object({
@@ -18,12 +18,11 @@ export async function POST(req: NextRequest) {
   try {
     const { token, password } = schema.parse(await req.json())
 
-    const userId = await redis.get<string>(`pw-reset:${token}`)
+    const userId = await consumeAuthToken('pw-reset', token)
     if (!userId) return ApiErrors.tokenExpired()
 
     const hashed = await bcrypt.hash(password, 12)
     await prisma.user.update({ where: { id: userId }, data: { password: hashed } })
-    await redis.del(`pw-reset:${token}`)
 
     await auditLog({ userId, action: 'PASSWORD_RESET', resource: 'user' })
 

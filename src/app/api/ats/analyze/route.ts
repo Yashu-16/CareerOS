@@ -5,7 +5,7 @@ import { getCurrentUser } from '@/lib/auth-helpers'
 import { analyzeResumeATS } from '@/lib/anthropic'
 import { generateEmbedding } from '@/lib/openai'
 import { upsertResumeEmbedding } from '@/lib/pinecone'
-import { generateDownloadUrl } from '@/lib/s3'
+import { getResumeBuffer } from '@/lib/resume-storage'
 import { parseResumeBuffer } from '@/lib/resume-parser'
 import { ApiErrors, auditLog } from '@/lib/errors'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
@@ -34,10 +34,7 @@ export async function POST(req: NextRequest) {
     // Get resume text (cached if available).
     let resumeText = resume.parsedText
     if (!resumeText) {
-      const downloadUrl = await generateDownloadUrl(resume.s3Key)
-      const fileRes = await fetch(downloadUrl)
-      if (!fileRes.ok) return ApiErrors.externalDown()
-      const buffer = Buffer.from(await fileRes.arrayBuffer())
+      const buffer = await getResumeBuffer(resume.s3Key)
       resumeText = await parseResumeBuffer(buffer, resume.mimeType)
       await prisma.resume.update({ where: { id: resumeId }, data: { parsedText: resumeText } })
     }

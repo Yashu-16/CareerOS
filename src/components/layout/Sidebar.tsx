@@ -26,7 +26,7 @@ export function Sidebar() {
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-body-md font-medium transition-colors',
                 active
-                  ? 'bg-primary-50 text-primary-600'
+                  ? 'bg-primary-50 text-primary-700'
                   : 'text-gray-700 hover:bg-gray-100'
               )}
             >

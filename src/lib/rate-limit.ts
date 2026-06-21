@@ -1,15 +1,18 @@
 import { redis } from './redis'
+import { isRedisConfigured } from './redis-config'
 
 /**
  * Fixed-window rate limiter backed by Upstash Redis.
  * Returns true if the request is allowed, false if the limit is exceeded.
- * Fails open (allows the request) if Redis is unavailable so the app stays usable.
+ * Skips Redis entirely when not configured (avoids slow failed network calls).
  */
 export async function rateLimit(
   key: string,
   limit: number,
   windowSeconds: number
 ): Promise<boolean> {
+  if (!isRedisConfigured() || !redis) return true
+
   try {
     const current = await redis.incr(key)
     if (current === 1) await redis.expire(key, windowSeconds)

@@ -1,14 +1,12 @@
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-helpers'
-import { findMatchingJobs } from '@/lib/pinecone'
 import { StatsRow } from '@/components/dashboard/StatsRow'
-import { TopMatchedJobs } from '@/components/dashboard/TopMatchedJobs'
+import { TopMatchedJobsLoader } from '@/components/dashboard/TopMatchedJobsLoader'
 import { ATSScoreCard } from '@/components/resume/ATSScoreCard'
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed'
-import type { JobWithMatch } from '@/types'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 30
 
 function greeting() {
   const h = new Date().getHours()
@@ -23,37 +21,51 @@ export default async function DashboardPage() {
   const userId = sessionUser.id
 
   const [user, latestATS, applicationStats, recentApplications, resume] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId } }),
-    prisma.aTSReport.findFirst({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true },
+    }),
+    prisma.aTSReport.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        overallScore: true,
+        experienceScore: true,
+        skillsScore: true,
+        educationScore: true,
+        summaryScore: true,
+        matchedKeywords: true,
+        missingKeywords: true,
+        suggestions: true,
+        createdAt: true,
+      },
+    }),
     prisma.application.groupBy({ by: ['status'], where: { userId }, _count: true }),
     prisma.application.findMany({
       where: { userId },
-      include: { job: true },
+      include: {
+        job: {
+          select: {
+            id: true,
+            title: true,
+            company: true,
+            location: true,
+            applyUrl: true,
+          },
+        },
+      },
       orderBy: { updatedAt: 'desc' },
       take: 5,
     }),
-    prisma.resume.findFirst({ where: { userId, isActive: true } }),
+    prisma.resume.findFirst({
+      where: { userId, isActive: true },
+      select: { id: true },
+    }),
   ])
 
-  // AI-matched jobs (degrade gracefully if the vector DB is unavailable).
-  let matchedJobs: JobWithMatch[] = []
-  if (resume?.embedding?.length) {
-    try {
-      const matches = await findMatchingJobs(resume.embedding, 10)
-      const jobIds = matches.map((m) => m.id)
-      if (jobIds.length) {
-        const jobs = await prisma.job.findMany({ where: { id: { in: jobIds } } })
-        matchedJobs = jobs
-          .map((job) => ({ ...job, matchScore: matches.find((m) => m.id === job.id)?.score || 0 }))
-          .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
-      }
-    } catch (err) {
-      console.error('[DASHBOARD] match lookup failed:', err)
-    }
-  }
-
   const statsMap = Object.fromEntries(applicationStats.map((s) => [s.status, s._count]))
-  const firstName = user?.name?.split(' ')[0] || 'there'
+  const firstName = user?.name?.split(' ')[0] || sessionUser.name?.split(' ')[0] || 'there'
 
   return (
     <div className="space-y-6">
@@ -73,14 +85,14 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8">
-          <TopMatchedJobs jobs={matchedJobs} />
+          <TopMatchedJobsLoader />
         </div>
         <div className="lg:col-span-4">
-          <ATSScoreCard report={latestATS} resumeId={resume?.id} />
+          <ATSScoreCard report={latestATS as Parameters<typeof ATSScoreCard>[0]['report']} resumeId={resume?.id} />
         </div>
       </div>
 
-      <ActivityFeed applications={recentApplications} />
+      <ActivityFeed applications={recentApplications as Parameters<typeof ActivityFeed>[0]['applications']} />
     </div>
   )
 }

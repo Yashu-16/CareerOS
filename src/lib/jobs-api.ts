@@ -1,4 +1,5 @@
 import type { JobType, LocationType } from '@prisma/client'
+import { isJobPostedTooOld } from '@/lib/job-freshness'
 
 const BASE_URL = 'https://jsearch.p.rapidapi.com'
 
@@ -42,24 +43,55 @@ export async function searchJobs(params: SearchJobsParams): Promise<any[]> {
   const url = new URL(`${BASE_URL}/search`)
   url.searchParams.set('query', params.query)
   url.searchParams.set('location', params.location || 'India')
-  url.searchParams.set('employment_types', (params.jobType || 'FULLTIME').toUpperCase())
+  // Only constrain employment type when the user actually picked one; otherwise
+  // JSearch returns every type. Our internal enum must be translated to the
+  // values JSearch expects (INTERN / CONTRACTOR), or filtering silently returns nothing.
+  const jsearchType = toJSearchEmploymentType(params.jobType)
+  if (jsearchType) url.searchParams.set('employment_types', jsearchType)
   url.searchParams.set('date_posted', params.datePosted || 'week')
   url.searchParams.set('page', String(params.page || 1))
   url.searchParams.set('num_pages', String(params.numPages || 1))
   url.searchParams.set('country', 'in')
   url.searchParams.set('language', 'en')
 
-  const response = await fetch(url.toString(), {
-    headers: {
-      'X-RapidAPI-Key': process.env.JSEARCH_API_KEY!,
-      'X-RapidAPI-Host': process.env.JSEARCH_API_HOST || 'jsearch.p.rapidapi.com',
-    },
-    next: { revalidate: 3600 },
-  })
+  let lastError: Error | null = null
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 1500 * attempt))
 
-  if (!response.ok) throw new Error(`JSearch API error: ${response.status}`)
-  const data = await response.json()
-  return data.data || []
+    const response = await fetch(url.toString(), {
+      headers: {
+        'X-RapidAPI-Key': process.env.JSEARCH_API_KEY!,
+        'X-RapidAPI-Host': process.env.JSEARCH_API_HOST || 'jsearch.p.rapidapi.com',
+      },
+      cache: 'no-store',
+    })
+
+    if (response.status === 429) {
+      lastError = new Error(`JSearch API error: 429`)
+      continue
+    }
+    if (!response.ok) throw new Error(`JSearch API error: ${response.status}`)
+    const data = await response.json()
+    return data.data || []
+  }
+  throw lastError || new Error('JSearch API error: 429')
+}
+
+/**
+ * Translate our internal JobType enum to the employment_types value JSearch
+ * understands. Returns undefined when no specific type is requested so the
+ * search isn't needlessly narrowed.
+ */
+function toJSearchEmploymentType(jobType?: string): string | undefined {
+  if (!jobType) return undefined
+  const map: Record<string, string> = {
+    FULLTIME: 'FULLTIME',
+    PARTTIME: 'PARTTIME',
+    INTERNSHIP: 'INTERN',
+    CONTRACT: 'CONTRACTOR',
+    FREELANCE: 'CONTRACTOR',
+  }
+  return map[jobType.toUpperCase()]
 }
 
 function mapJobType(type?: string): JobType {
@@ -72,7 +104,24 @@ function mapJobType(type?: string): JobType {
   return map[(type || '').toUpperCase()] || 'FULLTIME'
 }
 
-export function normalizeJob(raw: any): NormalizedJob {
+/**
+ * JSearch only emits coarse employment types (FULLTIME / PARTTIME / CONTRACTOR /
+ * INTERN), so "freelance" roles arrive as CONTRACTOR and many part-time roles
+ * arrive as FULLTIME. Refine using the job title, which is the most reliable
+ * signal, so our PARTTIME / FREELANCE / INTERNSHIP filters surface them.
+ */
+function refineJobType(base: JobType, title?: string): JobType {
+  const t = (title || '').toLowerCase()
+  if (/\bfreelance\b/.test(t)) return 'FREELANCE'
+  if (/\bpart[\s-]?time\b/.test(t)) return 'PARTTIME'
+  if (/\b(intern|internship|trainee|apprentice)\b/.test(t)) return 'INTERNSHIP'
+  if (/\b(contract|contractor|temporary|fixed[\s-]?term)\b/.test(t)) return 'CONTRACT'
+  return base
+}
+
+export function normalizeJob(raw: any): NormalizedJob | null {
+  if (!raw?.job_id) return null
+
   const location = `${raw.job_city || ''}, ${raw.job_state || ''}, India`
     .replace(/^, /, '')
     .replace(/, ,/g, ',')
@@ -83,6 +132,12 @@ export function normalizeJob(raw: any): NormalizedJob {
   if (publisher.includes('linkedin')) source = 'linkedin'
   else if (publisher.includes('naukri')) source = 'naukri'
   else if (publisher.includes('internshala')) source = 'internshala'
+  else if (publisher.includes('ziprecruiter')) source = 'ziprecruiter'
+
+  const postedAt = raw.job_posted_at_timestamp
+    ? new Date(raw.job_posted_at_timestamp * 1000)
+    : null
+  if (!postedAt || isJobPostedTooOld(postedAt)) return null
 
   return {
     externalId: raw.job_id,
@@ -91,7 +146,7 @@ export function normalizeJob(raw: any): NormalizedJob {
     companyLogo: raw.employer_logo || null,
     location,
     locationType: raw.job_is_remote ? 'REMOTE' : 'ONSITE',
-    jobType: mapJobType(raw.job_employment_type),
+    jobType: refineJobType(mapJobType(raw.job_employment_type), raw.job_title),
     salaryMin: raw.job_min_salary ?? null,
     salaryMax: raw.job_max_salary ?? null,
     salaryCurrency: raw.job_salary_currency || 'INR',
@@ -100,8 +155,6 @@ export function normalizeJob(raw: any): NormalizedJob {
     skills: raw.job_required_skills || [],
     applyUrl: raw.job_apply_link || '#',
     source,
-    postedAt: raw.job_posted_at_timestamp
-      ? new Date(raw.job_posted_at_timestamp * 1000)
-      : new Date(),
+    postedAt,
   }
 }

@@ -35,3 +35,6 @@ next-env.d.ts
 
 # prisma
 /prisma/migrations/dev.db*
+
+# local resume uploads (dev fallback when AWS is not configured)
+/.uploads/

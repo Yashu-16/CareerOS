@@ -15,13 +15,20 @@ const LEVELS = [
   { value: 'FIVE_PLUS', label: '5+ years' },
 ]
 
+const GENDERS = ['Male', 'Female', 'Non-binary', 'Prefer not to disclose']
+
 interface Profile {
   name: string
   email: string
+  phone: string
+  gender: string
   college: string
   degree: string
   graduationYear: number | null
   city: string
+  state: string
+  country: string
+  pincode: string
   targetRole: string
   targetIndustry: string
   experienceLevel: string
@@ -39,31 +46,70 @@ export default function ProfilePage() {
   const { toast } = useToast()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [saving, setSaving] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+
+  const applyProfile = (data: Record<string, unknown>) =>
+    setProfile({
+      name: (data.name as string) || '',
+      email: (data.email as string) || '',
+      phone: (data.phone as string) || '',
+      gender: (data.gender as string) || '',
+      college: (data.college as string) || '',
+      degree: (data.degree as string) || '',
+      graduationYear: (data.graduationYear as number | null) ?? null,
+      city: (data.city as string) || '',
+      state: (data.state as string) || '',
+      country: (data.country as string) || 'India',
+      pincode: (data.pincode as string) || '',
+      targetRole: (data.targetRole as string) || '',
+      targetIndustry: (data.targetIndustry as string) || '',
+      experienceLevel: (data.experienceLevel as string) || 'FRESHER',
+      skills: (data.skills as string[]) || [],
+      bio: (data.bio as string) || '',
+      linkedinUrl: (data.linkedinUrl as string) || '',
+      githubUrl: (data.githubUrl as string) || '',
+      portfolioUrl: (data.portfolioUrl as string) || '',
+      notifJobAlerts: (data.notifJobAlerts as boolean) ?? true,
+      notifInterviews: (data.notifInterviews as boolean) ?? true,
+      notifDigest: (data.notifDigest as boolean) ?? true,
+    })
+
+  const syncFromResume = async (silent = false) => {
+    setSyncing(true)
+    try {
+      const res = await fetch('/api/user/profile/sync-from-resume', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        if (!silent) toast(data.message || 'Could not read your resume.', 'error')
+        return false
+      }
+      if (data.profile) {
+        setProfile((p) => (p ? { ...p, ...data.profile } : p))
+      }
+      if (!silent && data.updated?.length) {
+        toast(`Imported from resume: ${data.updated.join(', ')}`, 'success')
+      } else if (!silent) {
+        toast('No new fields found in your resume.', 'info')
+      }
+      return Boolean(data.updated?.length)
+    } catch {
+      if (!silent) toast('Could not sync from resume.', 'error')
+      return false
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   useEffect(() => {
     ;(async () => {
       const res = await fetch('/api/user/profile')
       const data = await res.json()
-      setProfile({
-        name: data.name || '',
-        email: data.email || '',
-        college: data.college || '',
-        degree: data.degree || '',
-        graduationYear: data.graduationYear ?? null,
-        city: data.city || '',
-        targetRole: data.targetRole || '',
-        targetIndustry: data.targetIndustry || '',
-        experienceLevel: data.experienceLevel || 'FRESHER',
-        skills: data.skills || [],
-        bio: data.bio || '',
-        linkedinUrl: data.linkedinUrl || '',
-        githubUrl: data.githubUrl || '',
-        portfolioUrl: data.portfolioUrl || '',
-        notifJobAlerts: data.notifJobAlerts ?? true,
-        notifInterviews: data.notifInterviews ?? true,
-        notifDigest: data.notifDigest ?? true,
-      })
+      applyProfile(data)
+
+      const sparse = !(data.skills?.length) && !data.targetRole?.trim()
+      if (sparse) await syncFromResume(true)
     })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const update = <K extends keyof Profile>(key: K, value: Profile[K]) =>
@@ -97,9 +143,16 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-h1 text-gray-900">Profile & Settings</h1>
-        <p className="text-body-md text-gray-500 mt-1">Keep your profile updated for better matches.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-h1 text-gray-900">Profile & Settings</h1>
+          <p className="text-body-md text-gray-500 mt-1">
+            Used by the CareerOS extension to autofill job applications. Keep phone, gender, and address up to date.
+          </p>
+        </div>
+        <Button variant="secondary" onClick={() => syncFromResume()} loading={syncing}>
+          Import from resume
+        </Button>
       </div>
 
       <Card>
@@ -107,6 +160,22 @@ export default function ProfilePage() {
         <div className="space-y-4">
           <Input label="Full name" value={profile.name} onChange={(e) => update('name', e.target.value)} />
           <Input label="Email" value={profile.email} disabled />
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Input label="Phone" value={profile.phone} onChange={(e) => update('phone', e.target.value)} placeholder="+91 98765 43210" />
+            <div>
+              <label className="block text-label text-gray-700 mb-1.5">Gender</label>
+              <select
+                value={profile.gender}
+                onChange={(e) => update('gender', e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-600"
+              >
+                <option value="">Select gender</option>
+                {GENDERS.map((g) => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="grid sm:grid-cols-2 gap-4">
             <Input label="College" value={profile.college} onChange={(e) => update('college', e.target.value)} />
             <Input label="Degree" value={profile.degree} onChange={(e) => update('degree', e.target.value)} />
@@ -119,6 +188,11 @@ export default function ProfilePage() {
               onChange={(e) => update('graduationYear', e.target.value ? Number(e.target.value) : null)}
             />
             <Input label="City" value={profile.city} onChange={(e) => update('city', e.target.value)} />
+          </div>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Input label="State" value={profile.state} onChange={(e) => update('state', e.target.value)} />
+            <Input label="Country" value={profile.country} onChange={(e) => update('country', e.target.value)} />
+            <Input label="PIN code" value={profile.pincode} onChange={(e) => update('pincode', e.target.value)} />
           </div>
           <div>
             <label className="block text-label text-gray-700 mb-1.5">Bio</label>

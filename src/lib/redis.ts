@@ -1,12 +1,13 @@
 import { Redis } from '@upstash/redis'
+import { isRedisConfigured } from './redis-config'
 
 /**
  * Upstash Redis client (REST-based, edge-compatible).
- * Used for: email verification tokens, password reset tokens, OTPs, rate limiting.
+ * Returns null when not configured so callers skip network calls entirely.
  */
-// Fallbacks keep module import from throwing when env isn't set yet (e.g. during
-// `next build`). Actual calls fail gracefully and rate limiting fails open.
-export const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || 'https://placeholder.upstash.io',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || 'placeholder',
-})
+export const redis: Redis | null = isRedisConfigured()
+  ? new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    })
+  : null

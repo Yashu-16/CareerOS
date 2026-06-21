@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -27,8 +28,13 @@ model User {
   skills          String[]
   bio             String?          @db.VarChar(500)
   linkedinUrl     String?
-  githubUrl       String?
-  portfolioUrl    String?
+  githubUrl         String?
+  portfolioUrl      String?
+  phone             String?
+  gender            String?
+  state             String?
+  country           String?          @default("India")
+  pincode           String?
   notifJobAlerts  Boolean          @default(true)
   notifInterviews Boolean          @default(true)
   notifDigest     Boolean          @default(true)
@@ -36,14 +42,28 @@ model User {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
-  resumes      Resume[]
-  atsReports   ATSReport[]
-  applications Application[]
-  chatSessions ChatSession[]
-  savedJobs    SavedJob[]
-  outreachLogs OutreachLog[]
+  resumes         Resume[]
+  atsReports      ATSReport[]
+  applications    Application[]
+  chatSessions    ChatSession[]
+  savedJobs       SavedJob[]
+  outreachLogs    OutreachLog[]
+  tailoredResumes TailoredResume[]
+  extensionTokens ApplyExtensionToken[]
 
   @@map("users")
+}
+
+model AuthToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  purpose   String
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([purpose, expiresAt])
+  @@map("auth_tokens")
 }
 
 model Resume {
@@ -60,7 +80,9 @@ model Resume {
   createdAt  DateTime @default(now())
 
   atsReports ATSReport[]
+  tailoredFor TailoredResume[]
 
+  @@index([userId, isActive])
   @@map("resumes")
 }
 
@@ -109,24 +131,72 @@ model Job {
 
   applications Application[]
   savedBy      SavedJob[]
+  tailoredResumes TailoredResume[]
 
+  @@index([isActive, postedAt(sort: Desc)])
+  @@index([isActive, source])
+  @@index([isActive, jobType])
+  @@index([isActive, location])
+  @@index([company])
   @@map("jobs")
 }
 
 model Application {
-  id         String            @id @default(cuid())
-  userId     String
-  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobId      String
-  job        Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  status     ApplicationStatus @default(APPLIED)
-  matchScore Float?
-  notes      String?           @db.Text
-  appliedAt  DateTime          @default(now())
-  updatedAt  DateTime          @updatedAt
+  id               String            @id @default(cuid())
+  userId           String
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId            String
+  job              Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  tailoredResumeId String?
+  tailoredResume   TailoredResume?   @relation(fields: [tailoredResumeId], references: [id], onDelete: SetNull)
+  status           ApplicationStatus @default(APPLIED)
+  matchScore       Float?
+  notes            String?           @db.Text
+  appliedAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   @@unique([userId, jobId])
+  @@index([userId, status])
+  @@index([userId, updatedAt(sort: Desc)])
   @@map("applications")
+}
+
+model TailoredResume {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId           String
+  job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  baseResumeId    String
+  baseResume      Resume   @relation(fields: [baseResumeId], references: [id], onDelete: Cascade)
+  s3Key           String
+  filename        String
+  mimeType        String
+  parsedText      String   @db.Text
+  overallScore    Int
+  matchedKeywords String[]
+  missingKeywords String[]
+  addedKeywords   String[]
+  suggestions     Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  applications Application[]
+
+  @@unique([userId, jobId])
+  @@map("tailored_resumes")
+}
+
+model ApplyExtensionToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  label     String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("apply_extension_tokens")
 }
 
 model ChatSession {
@@ -138,6 +208,7 @@ model ChatSession {
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
+  @@index([userId, updatedAt(sort: Desc)])
   @@map("chat_sessions")
 }
 
@@ -185,6 +256,7 @@ model AuditLog {
   ip        String?
   createdAt DateTime @default(now())
 
+  @@index([createdAt(sort: Desc)])
   @@map("audit_logs")
 }
 
@@ -227,4 +299,36 @@ enum ApplicationStatus {
 enum MessageRole {
   USER
   ASSISTANT
+}
+
+enum EventType {
+  HACKATHON
+  NETWORKING
+  CAREER_SOCIAL
+  CAREER_FAIR
+  WORKSHOP
+}
+
+model CareerEvent {
+  id          String    @id @default(cuid())
+  externalId  String    @unique
+  title       String
+  organizer   String
+  type        EventType
+  city        String?
+  state       String?
+  location    String
+  isOnline    Boolean   @default(false)
+  description String    @db.Text
+  skills      String[]
+  url         String
+  source      String    @default("unstop")
+  startsAt    DateTime
+  endsAt      DateTime?
+  isActive    Boolean   @default(true)
+  scrapedAt   DateTime  @default(now())
+
+  @@index([isActive, endsAt])
+  @@index([type, city, startsAt])
+  @@map("career_events")
 }

@@ -1,0 +1,119 @@
+/*
+  Fonts are loaded via a runtime CSS @import (not next/font/google) so the
+  Docker build never depends on reaching fonts.googleapis.com at build time.
+  If you'd rather self-host, download the three families and replace this
+  block with local @font-face rules pointing at /public/fonts.
+*/
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --font-fraunces: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-jbmono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+}
+
+html, body {
+  background-color: #FAF8F4;
+  color: #13182B;
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Visible keyboard focus everywhere — never suppressed */
+:focus-visible {
+  outline: 2px solid #E8964A;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/*
+  Signature element: the "boarding pass" match-score card.
+  Used for job listings, tailoring results, and dashboard highlights —
+  the one recurring visual device tying the product together.
+  A perforated divider separates the score stub from the details, like a
+  ticket you've been granted entry on.
+*/
+.ticket-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  background: #FFFFFF;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(19, 24, 43, 0.05), 0 6px 20px rgba(19, 24, 43, 0.08);
+}
+
+.ticket-card__stub {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #13182B;
+  color: #FAF8F4;
+  padding: 16px 8px;
+}
+
+.ticket-card__perforation {
+  position: relative;
+  width: 0;
+  border-right: 1.5px dashed rgba(19, 24, 43, 0.18);
+}
+
+.ticket-card__perforation::before,
+.ticket-card__perforation::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #FAF8F4;
+  border-radius: 50%;
+  left: -7px;
+}
+
+.ticket-card__perforation::before { top: -7px; }
+.ticket-card__perforation::after { bottom: -7px; }
+
+.ticket-card__body {
+  padding: 16px 20px;
+}
+
+.skill-tag {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-jbmono), monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #F0EDE5;
+  color: #3A3F5C;
+  border: 1px solid #E4E6ED;
+}
+
+.skill-tag--matched {
+  background: #EAF7EF;
+  color: #1F7A4E;
+  border-color: #BCE6CE;
+}
+
+.skill-tag--missing {
+  background: #FCEEEC;
+  color: #B83F35;
+  border-color: #F5CFC9;
+}

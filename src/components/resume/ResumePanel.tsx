@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FileText } from 'lucide-react'
 import ResumeUpload from './ResumeUpload'
 import { ATSReportView } from './ATSReportView'
@@ -21,6 +21,14 @@ export function ResumePanel({ initialResume, initialReport, context }: Props) {
   const [report, setReport] = useState<ATSReport | null>(initialReport)
   const [jobDescription, setJobDescription] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
+  const [storageMode, setStorageMode] = useState<'s3' | 'local' | null>(null)
+
+  useEffect(() => {
+    fetch('/api/resume/storage')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setStorageMode(d?.mode === 's3' ? 's3' : 'local'))
+      .catch(() => setStorageMode(null))
+  }, [])
 
   const analyze = async () => {
     if (!resume) return
@@ -48,7 +56,14 @@ export function ResumePanel({ initialResume, initialReport, context }: Props) {
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h2 className="text-h2 text-gray-900 mb-4">Your resume</h2>
+        <h2 className="text-h2 text-gray-900 mb-1">Your resume</h2>
+        {storageMode && (
+          <p className="text-caption text-gray-500 mb-4">
+            {storageMode === 's3'
+              ? 'Files are stored securely in your AWS S3 bucket.'
+              : 'Dev mode: files stored locally (.uploads/). Add AWS keys in .env.local for S3.'}
+          </p>
+        )}
         {resume ? (
           <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -59,10 +74,16 @@ export function ResumePanel({ initialResume, initialReport, context }: Props) {
         ) : null}
         <div className="mt-4">
           <ResumeUpload
-            onUploadComplete={(id, filename) => {
+            onUploadComplete={(id, filename, storage) => {
               setResume({ id, filename })
               setReport(null)
-              toast('Resume uploaded! Run an analysis below.', 'success')
+              if (storage === 's3') setStorageMode('s3')
+              toast(
+                storage === 's3'
+                  ? 'Resume saved to AWS S3. Profile & job match updated.'
+                  : 'Resume uploaded! Profile & job match scores updated.',
+                'success'
+              )
             }}
           />
         </div>

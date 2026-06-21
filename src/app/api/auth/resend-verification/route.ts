@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { randomBytes } from 'crypto'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { redis } from '@/lib/redis'
-import { sendVerificationEmail } from '@/lib/sendgrid'
+import { storeAuthToken, logDevAuthLink } from '@/lib/auth-tokens'
+import { EmailDeliveryError, sendVerificationEmail } from '@/lib/email'
+import { getAppBaseUrlFromRequest } from '@/lib/app-url'
 import { ApiErrors } from '@/lib/errors'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 
@@ -24,12 +24,20 @@ export async function POST(req: NextRequest) {
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user || user.emailVerified) return NextResponse.json(GENERIC)
 
-    const token = randomBytes(32).toString('hex')
-    await redis.set(`email-verify:${token}`, user.id, { ex: 86400 })
-    const url = `${process.env.NEXT_PUBLIC_APP_URL}/verify-email?token=${token}`
-    await sendVerificationEmail(user.email, user.name, url)
+    const token = await storeAuthToken('email-verify', user.id, 86400)
+    const url = `${getAppBaseUrlFromRequest(req)}/verify-email?token=${token}`
+    logDevAuthLink('Email verification link', url)
 
-    return NextResponse.json(GENERIC)
+    try {
+      await sendVerificationEmail(user.email, user.name, url)
+    } catch (err) {
+      console.error('[RESEND_VERIFICATION] email failed:', err)
+      const message =
+        err instanceof EmailDeliveryError ? err.message : 'Could not send verification email.'
+      return NextResponse.json({ message, emailSent: false }, { status: 502 })
+    }
+
+    return NextResponse.json({ ...GENERIC, emailSent: true })
   } catch (error) {
     if (error instanceof z.ZodError) return ApiErrors.validation(error.errors)
     console.error('[RESEND_VERIFICATION]', error)

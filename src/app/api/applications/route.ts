@@ -24,6 +24,7 @@ const createSchema = z.object({
     .default('APPLIED'),
   matchScore: z.number().min(0).max(1).optional(),
   notes: z.string().max(5000).optional(),
+  tailoredResumeId: z.string().optional(),
 })
 
 export async function POST(req: NextRequest) {
@@ -35,15 +36,28 @@ export async function POST(req: NextRequest) {
     const job = await prisma.job.findUnique({ where: { id: body.jobId } })
     if (!job) return ApiErrors.notFound('Job')
 
+    const tailoredResumeId = body.tailoredResumeId
+      ? (
+          await prisma.tailoredResume.findFirst({
+            where: { id: body.tailoredResumeId, userId: user.id, jobId: body.jobId },
+          })
+        )?.id
+      : undefined
+
     const application = await prisma.application.upsert({
       where: { userId_jobId: { userId: user.id, jobId: body.jobId } },
-      update: { status: body.status, notes: body.notes ? clamp(body.notes, 5000) : undefined },
+      update: {
+        status: body.status,
+        notes: body.notes ? clamp(body.notes, 5000) : undefined,
+        tailoredResumeId: tailoredResumeId ?? undefined,
+      },
       create: {
         userId: user.id,
         jobId: body.jobId,
         status: body.status,
         matchScore: body.matchScore,
         notes: body.notes ? clamp(body.notes, 5000) : undefined,
+        tailoredResumeId,
       },
       include: { job: true },
     })

@@ -1,0 +1,411 @@
+// CareerOS — Prisma Schema (v1 MVP)
+// Scope: auth, profile, resume parsing/tailoring, real job ingestion (Greenhouse/Lever/Ashby),
+// application tracking. Indian-city-aware location modeling throughout.
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// ENUMS
+// ──────────────────────────────────────────────────────────────────────────
+
+enum EmploymentType {
+  INTERNSHIP
+  FRESHER
+  FULL_TIME
+  CONTRACT
+  PART_TIME
+}
+
+enum WorkMode {
+  REMOTE
+  HYBRID
+  ONSITE
+}
+
+enum AtsSource {
+  GREENHOUSE
+  LEVER
+  ASHBY
+  MANUAL
+}
+
+enum ApplicationStage {
+  SAVED
+  INTERESTED
+  APPLIED
+  ASSESSMENT
+  INTERVIEW
+  FINAL_ROUND
+  OFFER
+  REJECTED
+  ACCEPTED
+}
+
+enum ResumeFileType {
+  PDF
+  DOCX
+}
+
+enum ProficiencyLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// AUTH / USER
+// ──────────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String
+  isVerified    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  refreshTokens RefreshToken[]
+  profile       Profile?
+  resumes       Resume[]
+  applications  Application[]
+
+  @@index([email])
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  tokenHash  String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// PROFILE — single source of truth
+// ──────────────────────────────────────────────────────────────────────────
+
+model Profile {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fullName           String?
+  phone              String?
+  currentCity        String?
+  headline           String?
+  summary            String?
+
+  linkedinUrl        String?
+  githubUrl          String?
+  portfolioUrl       String?
+
+  preferredLocations String[] @default([])   // Indian cities, e.g. ["Bengaluru", "Pune"]
+  expectedSalaryMinLpa Float?
+  expectedSalaryMaxLpa Float?
+  careerGoals        String?
+  yearsOfExperience  Float?   @default(0)
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  education      Education[]
+  experience     Experience[]
+  projects       Project[]
+  certifications Certification[]
+  skills         ProfileSkill[]
+}
+
+model Education {
+  id            String   @id @default(uuid())
+  profileId     String
+  profile       Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  institution   String
+  degree        String
+  fieldOfStudy  String?
+  startDate     DateTime?
+  endDate       DateTime?
+  gradeValue    String?   // e.g. "8.7 CGPA" or "75%"
+  isCurrent     Boolean   @default(false)
+
+  createdAt     DateTime @default(now())
+
+  @@index([profileId])
+}
+
+model Experience {
+  id            String   @id @default(uuid())
+  profileId     String
+  profile       Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  company       String
+  title         String
+  location      String?
+  startDate     DateTime?
+  endDate       DateTime?
+  isCurrent     Boolean   @default(false)
+  description   String?   // raw bullet text, newline-delimited
+  achievements  String[]  @default([])
+
+  createdAt     DateTime @default(now())
+
+  @@index([profileId])
+}
+
+model Project {
+  id            String   @id @default(uuid())
+  profileId     String
+  profile       Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  name          String
+  description   String?
+  techStack     String[] @default([])
+  projectUrl    String?
+  repoUrl       String?
+  startDate     DateTime?
+  endDate       DateTime?
+
+  createdAt     DateTime @default(now())
+
+  @@index([profileId])
+}
+
+model Certification {
+  id            String   @id @default(uuid())
+  profileId     String
+  profile       Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  name          String
+  issuer        String?
+  issueDate     DateTime?
+  expiryDate    DateTime?
+  credentialUrl String?
+
+  createdAt     DateTime @default(now())
+
+  @@index([profileId])
+}
+
+model Skill {
+  id        String         @id @default(uuid())
+  name      String         @unique
+  category  String?        // e.g. "Programming Language", "Tool", "Soft Skill"
+
+  profiles  ProfileSkill[]
+  jobSkills JobSkill[]
+
+  @@index([name])
+}
+
+model ProfileSkill {
+  id           String           @id @default(uuid())
+  profileId    String
+  profile      Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  skillId      String
+  skill        Skill            @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  proficiency  ProficiencyLevel @default(INTERMEDIATE)
+  yearsOfUse   Float?
+
+  @@unique([profileId, skillId])
+  @@index([profileId])
+  @@index([skillId])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// RESUME — upload, parse, tailor, version
+// ──────────────────────────────────────────────────────────────────────────
+
+model Resume {
+  id            String         @id @default(uuid())
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  isMaster      Boolean        @default(false)
+  originalFileName String
+  fileType      ResumeFileType
+  storageKey    String         // path/key on disk or S3
+  rawText       String?        // extracted plaintext for parsing/embedding
+
+  atsScore      Int?           // 0-100
+  resumeScore   Int?           // 0-100
+  parsedSkills  String[]       @default([])
+  parsedSummary String?
+  recommendations String[]     @default([])
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  versions      ResumeVersion[]
+
+  @@index([userId])
+}
+
+model ResumeVersion {
+  id              String   @id @default(uuid())
+  resumeId        String
+  resume          Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+  jobId           String?
+  job             Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  label           String   // e.g. "Tailored for Razorpay - SDE2"
+  contentJson     Json     // structured tailored resume content (sections, ordering)
+  matchScore      Int?     // 0-100 overall match score at time of generation
+  missingSkills   String[] @default([])
+  storageKeyPdf   String?
+  storageKeyDocx  String?
+
+  createdAt       DateTime @default(now())
+
+  @@index([resumeId])
+  @@index([jobId])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// COMPANIES / JOBS — real ingestion from Greenhouse, Lever, Ashby
+// ──────────────────────────────────────────────────────────────────────────
+
+model Company {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  logoUrl     String?
+  website     String?
+  industry    String?
+  sizeRange   String?  // e.g. "201-500"
+
+  atsSource   AtsSource
+  atsBoardToken String  // e.g. greenhouse board token, lever company slug, ashby org slug
+  isActive    Boolean   @default(true)
+
+  jobs        Job[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([atsSource, atsBoardToken])
+  @@index([name])
+}
+
+model Job {
+  id                String         @id @default(uuid())
+  companyId         String
+  company           Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  externalId        String         // ID from the source ATS
+  atsSource         AtsSource
+  title             String
+  department        String?
+  locationRaw       String?        // as given by source
+  normalizedCity    String?        // mapped to a known Indian city if applicable
+  workMode          WorkMode?
+  employmentType    EmploymentType?
+
+  descriptionHtml   String
+  descriptionText   String         // stripped plaintext used for AI analysis
+
+  salaryMinLpa      Float?
+  salaryMaxLpa      Float?
+
+  applyUrl          String
+  postedAt          DateTime?
+  isIndiaRelevant   Boolean        @default(false)
+  isActive          Boolean        @default(true)
+
+  extractedKeywords String[]       @default([])
+  extractedResponsibilities String[] @default([])
+
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  skills            JobSkill[]
+  applications      Application[]
+  resumeVersions    ResumeVersion[]
+
+  @@unique([companyId, externalId])
+  @@index([companyId])
+  @@index([normalizedCity])
+  @@index([isIndiaRelevant, isActive])
+  @@index([postedAt])
+}
+
+model JobSkill {
+  id        String   @id @default(uuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skillId   String
+  skill     Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  isRequired Boolean @default(true)
+
+  @@unique([jobId, skillId])
+  @@index([jobId])
+  @@index([skillId])
+}
+
+model IngestionRun {
+  id            String    @id @default(uuid())
+  atsSource     AtsSource
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+  jobsFetched   Int       @default(0)
+  jobsCreated   Int       @default(0)
+  jobsUpdated   Int       @default(0)
+  errorMessage  String?
+
+  @@index([atsSource, startedAt])
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// APPLICATION TRACKER
+// ──────────────────────────────────────────────────────────────────────────
+
+model Application {
+  id            String           @id @default(uuid())
+  userId        String
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId         String?
+  job           Job?             @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  // denormalized snapshot fields so tracker entries survive even if job is deleted/external
+  companyName   String
+  jobTitle      String
+  jobUrl        String?
+
+  stage         ApplicationStage @default(SAVED)
+  salaryLpa     Float?
+  recruiterName String?
+  recruiterContact String?
+  notes         String?
+  appliedAt     DateTime?
+
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  stageHistory  ApplicationStageHistory[]
+
+  @@index([userId])
+  @@index([userId, stage])
+  @@index([jobId])
+}
+
+model ApplicationStageHistory {
+  id             String           @id @default(uuid())
+  applicationId  String
+  application    Application      @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromStage      ApplicationStage?
+  toStage        ApplicationStage
+  changedAt      DateTime         @default(now())
+
+  @@index([applicationId])
+}

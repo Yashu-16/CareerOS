@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        width: 360px;
+        margin: 0;
+        padding: 0;
+        font-size: 14px;
+        color: #111;
+        background: #f8faf8;
+      }
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px 10px;
+        background: #fff;
+        border-bottom: 1px solid #eef0ee;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 700;
+        font-size: 16px;
+      }
+      .brand-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #6be82c, #4ade80);
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+      }
+      .header-actions {
+        display: flex;
+        gap: 4px;
+      }
+      .icon-btn {
+        border: none;
+        background: transparent;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        cursor: pointer;
+        color: #666;
+        font-size: 16px;
+      }
+      .icon-btn:hover {
+        background: #f3f4f6;
+      }
+      .body {
+        padding: 12px 16px 16px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #e8ebe8;
+        border-radius: 12px;
+        padding: 14px;
+        margin-bottom: 12px;
+      }
+      .job-card {
+        text-align: center;
+      }
+      .job-card p {
+        margin: 0 0 10px;
+        color: #666;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      .pill-btn {
+        width: 100%;
+        border: none;
+        border-radius: 999px;
+        padding: 11px 16px;
+        background: #d4f5c4;
+        color: #111;
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .pill-btn:hover {
+        background: #c6f0b0;
+      }
+      .pill-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .match-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 10px;
+        font-size: 13px;
+      }
+      .match-score {
+        font-weight: 700;
+        color: #2d6a1e;
+      }
+      .autofill-btn {
+        width: 100%;
+        border: none;
+        border-radius: 12px;
+        padding: 14px;
+        background: #6be82c;
+        color: #111;
+        font-weight: 700;
+        font-size: 16px;
+        cursor: pointer;
+        margin-bottom: 8px;
+      }
+      .autofill-btn:hover {
+        background: #5fd925;
+      }
+      .autofill-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .status-bar {
+        background: #ecfdf0;
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 12px;
+        color: #374151;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .status-bar.warn {
+        background: #fff7ed;
+        color: #9a3412;
+      }
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #22c55e;
+        flex-shrink: 0;
+      }
+      .status-dot.warn {
+        background: #f97316;
+      }
+      .section {
+        background: #fff;
+        border: 1px solid #e8ebe8;
+        border-radius: 12px;
+        margin-bottom: 8px;
+        overflow: hidden;
+      }
+      .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .section-head:hover {
+        background: #fafafa;
+      }
+      .section-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .section-body {
+        padding: 0 14px 12px;
+        font-size: 12px;
+        color: #555;
+        line-height: 1.5;
+        display: none;
+      }
+      .section.open .section-body {
+        display: block;
+      }
+      .chevron {
+        color: #999;
+        font-size: 12px;
+      }
+      .file-name {
+        font-size: 12px;
+        color: #666;
+        margin: 4px 0 8px 34px;
+      }
+      .ghost-btn {
+        display: block;
+        width: calc(100% - 28px);
+        margin: 0 14px 12px;
+        padding: 9px;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        background: #f9fafb;
+        color: #374151;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        text-align: center;
+        text-decoration: none;
+      }
+      .ghost-btn:hover {
+        background: #f3f4f6;
+      }
+      .connect-panel {
+        text-align: center;
+        padding: 8px 0 4px;
+      }
+      .connect-panel h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+      .connect-panel p {
+        margin: 0 0 16px;
+        color: #666;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .connect-btn {
+        width: 100%;
+        border: none;
+        border-radius: 12px;
+        padding: 14px;
+        background: #6be82c;
+        color: #111;
+        font-weight: 700;
+        font-size: 15px;
+        cursor: pointer;
+      }
+      .connect-btn:hover {
+        background: #5fd925;
+      }
+      .settings-panel {
+        display: none;
+        padding-top: 4px;
+      }
+      .settings-panel.open {
+        display: block;
+      }
+      .settings-panel label {
+        display: block;
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 4px;
+      }
+      .settings-panel input {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        font-size: 13px;
+      }
+      .secondary-btn {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        background: #fff;
+        color: #374151;
+        font-weight: 600;
+        cursor: pointer;
+        margin-bottom: 8px;
+      }
+      .secondary-btn.danger {
+        color: #b91c1c;
+        border-color: #fecaca;
+      }
+      .hidden {
+        display: none !important;
+      }
+      .msg {
+        font-size: 12px;
+        margin-top: 8px;
+        min-height: 16px;
+      }
+      .msg.ok {
+        color: #15803d;
+      }
+      .msg.err {
+        color: #b91c1c;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div class="brand">
+        <div class="brand-icon">C</div>
+        CareerOS
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="toggleSettings" title="Settings">⚙</button>
+      </div>
+    </div>
+
+    <div class="body">
+      <div id="connectView" class="connect-panel">
+        <h2>Connect your account</h2>
+        <p>
+          Sign in once on CareerOS — we save your connection automatically. No tokens to copy or paste.
+        </p>
+        <button class="connect-btn" id="connectBtn">Connect to CareerOS</button>
+        <p class="msg" id="connectMsg"></p>
+      </div>
+
+      <div id="mainView" class="hidden">
+        <div class="status-bar" id="connectionBar">
+          <span class="status-dot"></span>
+          <span id="connectionText">Connected</span>
+        </div>
+
+        <div class="card job-card" id="jobCard">
+          <p id="jobHint">Open a job in CareerOS and click <strong>Apply with autofill</strong> to link this application.</p>
+          <div class="match-row hidden" id="matchRow">
+            <span id="jobLabel">Job match</span>
+            <span class="match-score" id="matchScore"></span>
+          </div>
+          <button class="pill-btn hidden" id="openJobBtn" style="margin-top: 10px">Open job in CareerOS</button>
+        </div>
+
+        <button class="autofill-btn" id="autofill">Autofill</button>
+        <p class="msg" id="status"></p>
+
+        <div class="section" id="infoSection">
+          <div class="section-head" data-toggle="infoSection">
+            <span class="section-title">📁 Your Autofill Information</span>
+            <span class="chevron">›</span>
+          </div>
+          <div class="section-body" id="infoBody"></div>
+        </div>
+
+        <div class="section" id="resumeSection">
+          <div class="section-head" data-toggle="resumeSection">
+            <span class="section-title">📄 Tailored Resume</span>
+            <span class="chevron">›</span>
+          </div>
+          <div class="file-name" id="resumeFile">No tailored resume for this job yet</div>
+          <a class="ghost-btn hidden" id="tailorLink" href="#" target="_blank" rel="noopener">✨ Tailor resume in CareerOS</a>
+        </div>
+      </div>
+
+      <div class="settings-panel" id="settingsPanel">
+        <label for="baseUrl">CareerOS URL</label>
+        <input id="baseUrl" placeholder="http://localhost:3000" />
+        <button class="secondary-btn" id="saveSettings">Save URL</button>
+        <button class="secondary-btn danger" id="disconnect">Disconnect account</button>
+      </div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

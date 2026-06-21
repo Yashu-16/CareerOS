@@ -4,7 +4,7 @@ import { getCurrentUser } from '@/lib/auth-helpers'
 import { KanbanBoard } from '@/components/tracker/KanbanBoard'
 import type { ApplicationWithJob } from '@/types'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 30
 
 export default async function TrackerPage() {
   const sessionUser = await getCurrentUser()
@@ -12,7 +12,22 @@ export default async function TrackerPage() {
 
   const applications = await prisma.application.findMany({
     where: { userId: sessionUser.id },
-    include: { job: true },
+    include: {
+      job: {
+        select: {
+          id: true,
+          title: true,
+          company: true,
+          companyLogo: true,
+          location: true,
+          locationType: true,
+          jobType: true,
+          applyUrl: true,
+          postedAt: true,
+          source: true,
+        },
+      },
+    },
     orderBy: { updatedAt: 'desc' },
   })
 

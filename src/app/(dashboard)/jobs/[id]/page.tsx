@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-helpers'
 import { Button } from '@/components/ui/Button'
 import { JobTypeBadge, LocationBadge, SkillTag } from '@/components/ui/Badge'
-import { formatSalary, timeAgo } from '@/lib/format'
+import { formatSalary, formatJobPostedAt } from '@/lib/format'
 
 export default async function JobDetailPage({ params }: { params: { id: string } }) {
   await getCurrentUser()
@@ -72,7 +72,9 @@ export default async function JobDetailPage({ params }: { params: { id: string }
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h2 className="text-h2 text-gray-900 mb-3">Description</h2>
         <p className="text-body-md text-gray-700 whitespace-pre-line prose-readable">{job.description}</p>
-        <p className="text-caption text-gray-500 mt-4">Posted {timeAgo(job.postedAt)} · via {job.source}</p>
+        <p className="text-caption text-gray-500 mt-4">
+          {formatJobPostedAt(job.postedAt, job.scrapedAt)} · via {job.source}
+        </p>
       </div>
     </div>
   )

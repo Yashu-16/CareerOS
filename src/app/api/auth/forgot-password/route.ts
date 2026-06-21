@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { randomBytes } from 'crypto'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { redis } from '@/lib/redis'
-import { sendPasswordResetEmail } from '@/lib/sendgrid'
+import { storeAuthToken, logDevAuthLink } from '@/lib/auth-tokens'
+import { sendPasswordResetEmail } from '@/lib/email'
+import { getAppBaseUrlFromRequest } from '@/lib/app-url'
 import { ApiErrors } from '@/lib/errors'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 
@@ -21,9 +21,9 @@ export async function POST(req: NextRequest) {
     const user = await prisma.user.findFirst({ where: { email, deletedAt: null } })
     if (!user || !user.password) return NextResponse.json(GENERIC)
 
-    const token = randomBytes(32).toString('hex')
-    await redis.set(`pw-reset:${token}`, user.id, { ex: 3600 })
-    const url = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${token}`
+    const token = await storeAuthToken('pw-reset', user.id, 3600)
+    const url = `${getAppBaseUrlFromRequest(req)}/reset-password?token=${token}`
+    logDevAuthLink('Password reset link', url)
     await sendPasswordResetEmail(user.email, user.name, url)
 
     return NextResponse.json(GENERIC)

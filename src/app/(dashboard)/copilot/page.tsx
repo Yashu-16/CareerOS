@@ -3,26 +3,23 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-helpers'
 import { CopilotChat } from '@/components/copilot/CopilotChat'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export default async function CopilotPage() {
   const sessionUser = await getCurrentUser()
   if (!sessionUser) redirect('/login')
 
-  // Reuse a recent empty session if available, otherwise start a fresh one.
   let session = await prisma.chatSession.findFirst({
     where: { userId: sessionUser.id },
     orderBy: { updatedAt: 'desc' },
-    include: { _count: { select: { messages: true } } },
+    select: { id: true },
   })
 
-  if (!session || session._count.messages > 0) {
-    session = {
-      ...(await prisma.chatSession.create({
-        data: { userId: sessionUser.id, title: 'New conversation' },
-      })),
-      _count: { messages: 0 },
-    }
+  if (!session) {
+    session = await prisma.chatSession.create({
+      data: { userId: sessionUser.id, title: 'New conversation' },
+      select: { id: true },
+    })
   }
 
   return (

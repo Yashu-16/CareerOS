@@ -61,15 +61,34 @@ export const authOptions: NextAuthOptions = {
       return true
     },
     async jwt({ token, user }) {
-      if (user || !token.id) {
-        const dbUser = await prisma.user.findUnique({ where: { email: token.email! } })
-        token.id = dbUser?.id
-        token.role = dbUser?.role
+      if (user) {
+        token.email = user.email
+        token.id = user.id
+        token.role = user.role
+        token.dbSyncedAt = Date.now()
+      }
+      // Re-sync id from DB at most once per minute (handles DB migrations without
+      // hitting Postgres on every session read).
+      const stale =
+        !token.dbSyncedAt || Date.now() - (token.dbSyncedAt as number) > 60_000
+      if (token.email && stale) {
+        const dbUser = await prisma.user.findFirst({
+          where: { email: token.email, deletedAt: null },
+          select: { id: true, role: true },
+        })
+        if (dbUser) {
+          token.id = dbUser.id
+          token.role = dbUser.role
+        } else {
+          delete token.id
+          delete token.role
+        }
+        token.dbSyncedAt = Date.now()
       }
       return token
     },
     async session({ session, token }) {
-      if (session.user) {
+      if (session.user && token.id) {
         session.user.id = token.id as string
         session.user.role = token.role as string
       }
@@ -82,4 +101,6 @@ export const authOptions: NextAuthOptions = {
     error: '/login',
   },
   secret: process.env.NEXTAUTH_SECRET,
+  // Required for HTTPS hosts (Amplify, Netlify, Vercel).
+  useSecureCookies: process.env.NEXTAUTH_URL?.startsWith('https://') ?? process.env.NODE_ENV === 'production',
 }

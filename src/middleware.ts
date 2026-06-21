@@ -3,15 +3,10 @@ import { NextResponse } from 'next/server'
 
 export default withAuth(
   function middleware(req) {
-    const token = req.nextauth.token
     const { pathname } = req.nextUrl
 
-    // Redirect logged-in users away from auth pages.
-    if (token && (pathname.startsWith('/login') || pathname.startsWith('/signup'))) {
-      return NextResponse.redirect(new URL('/dashboard', req.url))
-    }
-
     // Admin-only routes.
+    const token = req.nextauth.token
     if (pathname.startsWith('/admin') && token?.role !== 'ADMIN') {
       return NextResponse.json({ error: true, code: 'FORBIDDEN' }, { status: 403 })
     }
@@ -28,20 +23,22 @@ export default withAuth(
           '/verify-email',
           '/forgot-password',
           '/reset-password',
+          '/extension/connect',
           '/',
           '/api/auth',
         ]
-        if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + '/') || pathname.startsWith(p + '?'))) {
+        if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
           return true
         }
-        // Public landing + auth API are open; everything else requires a token.
         if (pathname === '/') return true
-        return !!token
+        return !!token?.id
       },
     },
   }
 )
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|public/|.*\\.png$|.*\\.svg$).*)'],
+  // `/api/cron` is intentionally excluded: those routes authenticate via a
+  // CRON_SECRET bearer token (used by Vercel Cron), not a NextAuth session.
+  matcher: ['/((?!api/cron|_next/static|_next/image|favicon.ico|public/|.*\\.png$|.*\\.svg$).*)'],
 }

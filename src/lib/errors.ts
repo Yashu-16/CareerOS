@@ -45,6 +45,8 @@ export const ApiErrors = {
     errorResponse('DATABASE_ERROR', 'Something went wrong on our end. Please try again.', 500),
   externalDown: () =>
     errorResponse('EXTERNAL_SERVICE_DOWN', 'A third-party service is temporarily unavailable.', 503),
+  storageUnavailable: (message: string) =>
+    errorResponse('STORAGE_UNAVAILABLE', message, 503),
   aiUnavailable: () =>
     errorResponse('AI_SERVICE_UNAVAILABLE', 'The AI service is temporarily unavailable.', 503),
 }

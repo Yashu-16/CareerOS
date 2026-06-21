@@ -36,7 +36,7 @@ export function TopBar() {
           onClick={() => setMenuOpen((v) => !v)}
           className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-gray-100 transition-colors"
         >
-          <span className="h-8 w-8 rounded-full bg-primary-600 text-white grid place-items-center text-body-sm font-semibold">
+          <span className="h-8 w-8 rounded-full bg-primary-600 text-gray-900 grid place-items-center text-body-sm font-semibold">
             {initial}
           </span>
           <span className="hidden sm:block text-body-sm text-gray-700 max-w-[140px] truncate">{name}</span>

@@ -1,45 +1,100 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import type { EventType, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-helpers'
+import { matchesUserCity, EVENT_TYPE_LABELS, EVENT_SOURCE_LABELS, isUpcomingEvent } from '@/lib/events'
+import type { EventSource } from '@/lib/events'
+import { isInEventDisplayWindow, eventDisplayWindow } from '@/lib/event-window'
 import { ApiErrors } from '@/lib/errors'
 
-/**
- * "Hiring drives" are derived from REAL job data: companies that are actively
- * hiring right now, grouped with their open-role counts. No fabricated events.
- */
-export async function GET() {
+const VALID_TYPES: EventType[] = ['HACKATHON', 'NETWORKING', 'CAREER_SOCIAL', 'CAREER_FAIR', 'WORKSHOP']
+const VALID_SOURCES = Object.keys(EVENT_SOURCE_LABELS) as EventSource[]
+
+const EVENT_LIST_SELECT = {
+  id: true,
+  externalId: true,
+  title: true,
+  organizer: true,
+  type: true,
+  city: true,
+  state: true,
+  location: true,
+  isOnline: true,
+  skills: true,
+  url: true,
+  source: true,
+  startsAt: true,
+  endsAt: true,
+} satisfies Prisma.CareerEventSelect
+
+export async function GET(req: NextRequest) {
   const user = await getCurrentUser()
   if (!user) return ApiErrors.unauthorized()
 
-  const grouped = await prisma.job.groupBy({
-    by: ['company'],
-    where: { isActive: true },
-    _count: { _all: true },
-    _max: { postedAt: true },
-    orderBy: { _count: { company: 'desc' } },
-    take: 24,
-  })
+  const { searchParams } = new URL(req.url)
+  const typeParam = (searchParams.get('type') || '').toUpperCase()
+  const type = VALID_TYPES.includes(typeParam as EventType) ? (typeParam as EventType) : undefined
+  const sourceParam = (searchParams.get('source') || '').toLowerCase()
+  const source = VALID_SOURCES.includes(sourceParam as EventSource)
+    ? (sourceParam as EventSource)
+    : undefined
 
-  // Attach a representative location + apply link from a real listing.
-  const drives = await Promise.all(
-    grouped.map(async (g) => {
-      const sample = await prisma.job.findFirst({
-        where: { company: g.company, isActive: true },
-        orderBy: { postedAt: 'desc' },
-        select: { id: true, company: true, companyLogo: true, location: true, applyUrl: true, title: true },
-      })
-      return {
-        company: g.company,
-        openRoles: g._count._all,
-        latestPostedAt: g._max.postedAt,
-        sampleRole: sample?.title ?? null,
-        companyLogo: sample?.companyLogo ?? null,
-        location: sample?.location ?? 'India',
-        applyUrl: sample?.applyUrl ?? '#',
-        jobId: sample?.id ?? null,
-      }
+  try {
+    const userCity = user.city?.trim() || null
+    const now = new Date()
+    const { windowStart, windowEnd } = eventDisplayWindow(now)
+
+    const where: Prisma.CareerEventWhereInput = {
+      isActive: true,
+      startsAt: { gte: windowStart, lte: windowEnd },
+      OR: [{ endsAt: { gte: now } }, { endsAt: null, startsAt: { gte: now } }],
+    }
+    if (type) where.type = type
+    if (source) where.source = source
+
+    const events = await prisma.careerEvent.findMany({
+      where,
+      select: EVENT_LIST_SELECT,
+      orderBy: [{ endsAt: { sort: 'asc', nulls: 'last' } }, { startsAt: 'asc' }],
+      take: 200,
     })
-  )
 
-  return NextResponse.json({ drives })
+    const locationMatched = events.filter(
+      (e) => isUpcomingEvent(e) && isInEventDisplayWindow(e) && matchesUserCity(userCity, e)
+    )
+
+    const typeFacets = locationMatched.reduce<Record<string, number>>((acc, e) => {
+      acc[e.type] = (acc[e.type] || 0) + 1
+      return acc
+    }, {})
+
+    const sourceFacets = locationMatched.reduce<Record<string, number>>((acc, e) => {
+      acc[e.source] = (acc[e.source] || 0) + 1
+      return acc
+    }, {})
+
+    return NextResponse.json(
+      {
+        events: locationMatched,
+        city: userCity,
+        typeFacets,
+        sourceFacets,
+        typeLabels: EVENT_TYPE_LABELS,
+        sourceLabels: EVENT_SOURCE_LABELS,
+        total: locationMatched.length,
+        windowDays: 3,
+        catalogUpdatedAt: (
+          await prisma.careerEvent.aggregate({
+            where: { isActive: true },
+            _max: { scrapedAt: true },
+          })
+        )._max.scrapedAt?.toISOString(),
+        nextScheduledSyncIst: '12:00 PM IST daily',
+      },
+      { headers: { 'Cache-Control': 'private, max-age=10, stale-while-revalidate=20' } }
+    )
+  } catch (error) {
+    console.error('[EVENTS]', error)
+    return ApiErrors.database()
+  }
 }

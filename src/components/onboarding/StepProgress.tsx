@@ -13,7 +13,7 @@ export function StepProgress({ current }: { current: 1 | 2 | 3 }) {
             <div
               className={cn(
                 'h-7 w-7 shrink-0 rounded-full grid place-items-center text-caption font-semibold',
-                active ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-500'
+                active ? 'bg-primary-600 text-gray-900' : 'bg-gray-200 text-gray-500'
               )}
             >
               {step}
