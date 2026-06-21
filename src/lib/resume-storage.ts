@@ -2,6 +2,14 @@ import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import {
+  AWS_ENV_HINT,
+  getAwsAccessKeyId,
+  getAwsRegion,
+  getAwsSecretAccessKey,
+  getS3BucketName,
+  isAwsS3Configured,
+} from '@/lib/aws-config'
 
 const UPLOAD_ROOT = path.join(process.cwd(), '.uploads')
 
@@ -32,11 +40,7 @@ function localUploadRoot(): string {
 
 /** True when real AWS credentials are set (not empty placeholders). */
 export function isS3Configured(): boolean {
-  if (process.env.RESUME_STORAGE === 'local') return false
-  const key = process.env.AWS_ACCESS_KEY_ID?.trim()
-  const secret = process.env.AWS_SECRET_ACCESS_KEY?.trim()
-  const bucket = process.env.S3_BUCKET_NAME?.trim()
-  return Boolean(key && secret && bucket)
+  return isAwsS3Configured()
 }
 
 export function getResumeStorageMode(): 's3' | 'local' {
@@ -46,10 +50,10 @@ export function getResumeStorageMode(): 's3' | 'local' {
 function getS3Client(): S3Client {
   if (!s3Client) {
     s3Client = new S3Client({
-      region: process.env.AWS_REGION || 'ap-south-1',
+      region: getAwsRegion(),
       credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID!.trim(),
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!.trim(),
+        accessKeyId: getAwsAccessKeyId()!,
+        secretAccessKey: getAwsSecretAccessKey()!,
       },
     })
   }
@@ -80,7 +84,7 @@ export async function resumeFileExists(key: string): Promise<boolean> {
   if (!isS3Configured()) return false
   try {
     const res = await getS3Client().send(
-      new GetObjectCommand({ Bucket: process.env.S3_BUCKET_NAME!, Key: key })
+      new GetObjectCommand({ Bucket: getS3BucketName()!, Key: key })
     )
     return Boolean(res.Body)
   } catch {
@@ -103,7 +107,7 @@ export async function uploadResume(
     try {
       await getS3Client().send(
         new PutObjectCommand({
-          Bucket: process.env.S3_BUCKET_NAME!,
+          Bucket: getS3BucketName()!,
           Key: key,
           Body: buffer,
           ContentType: mimeType,
@@ -116,7 +120,7 @@ export async function uploadResume(
       if (name === 'AccessDenied' || name === 'InvalidAccessKeyId') {
         const msg =
           'Could not upload to S3. The IAM user needs s3:PutObject and s3:GetObject on your bucket. ' +
-          'Check AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and S3_BUCKET_NAME in your deployment env vars.'
+          `Check ${AWS_ENV_HINT}`
         if (isServerless()) {
           throw new ResumeStorageError(msg, 'S3_DENIED')
         }
@@ -130,8 +134,7 @@ export async function uploadResume(
     }
   } else if (isServerless()) {
     throw new ResumeStorageError(
-      'Resume upload requires AWS S3 in production. Set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, ' +
-        'AWS_REGION, and S3_BUCKET_NAME in Netlify (or your host) environment variables.',
+      `Resume upload requires AWS S3 in production. ${AWS_ENV_HINT}`,
       'S3_NOT_CONFIGURED'
     )
   }
@@ -163,7 +166,7 @@ export async function getResumeBuffer(key: string): Promise<Buffer> {
   }
 
   const res = await getS3Client().send(
-    new GetObjectCommand({ Bucket: process.env.S3_BUCKET_NAME!, Key: key })
+    new GetObjectCommand({ Bucket: getS3BucketName()!, Key: key })
   )
   if (!res.Body) throw new ResumeFileNotFoundError(key)
   return Buffer.from(await res.Body.transformToByteArray())
